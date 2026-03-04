@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -98,6 +99,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 .product-margin{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);white-space:nowrap;}
 .product-margin.manual{color:var(--muted);font-size:10px;}
 .onboard-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;}
+.import-mode-btn{flex:1;padding:9px 4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all 0.2s;text-align:center;}
+.import-mode-btn.active{background:var(--accent);border-color:var(--accent);color:#0a0a0f;font-weight:500;}
+#dropZone.dragover{border-color:var(--accent);background:rgba(124,255,196,0.05);}
+#importTable th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);color:var(--muted);font-weight:500;white-space:nowrap;}
+#importTable td{padding:8px 6px;border-bottom:1px solid rgba(42,42,58,0.5);color:var(--text);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#importTable tr:hover td{background:rgba(124,255,196,0.03);}
+#importTable tr.row-excluded td{opacity:0.3;text-decoration:line-through;}
+.import-row-toggle{background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:2px 6px;font-size:10px;cursor:pointer;}
+.import-row-toggle.included{border-color:var(--accent);color:var(--accent);}
 .onboard-card{background:var(--card);border:1px solid var(--accent);border-radius:20px;padding:28px;max-width:360px;width:100%;}
 .onboard-title{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--accent);margin-bottom:8px;}
 .onboard-sub{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6;}
@@ -133,6 +143,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 <body>
 
 <!-- Auth overlay -->
+
 <div class="onboard-overlay" id="authOverlay" style="display:flex">
   <div class="onboard-card">
     <div class="onboard-title">ATG Commission Tracker</div>
@@ -191,6 +202,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 <div class="tabs">
   <div class="tab active" onclick="switchTab('add')">+ Add</div>
   <div class="tab" onclick="switchTab('sales')">Log</div>
+  <div class="tab" onclick="switchTab('import')">Import</div>
   <div class="tab" onclick="switchTab('summary')">Summary</div>
   <div class="tab" onclick="switchTab('rates')">Rates</div>
 </div>
@@ -279,6 +291,96 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
       <div class="preview-total"><span>Commission</span><span id="previewCommission">—</span></div>
     </div>
     <button class="btn-primary" onclick="addSale()">Add Sale</button>
+  </div>
+</div>
+
+<div class="panel" id="panel-import">
+  <div class="form-card">
+    <div class="form-title">Import Sales & Payouts</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;">Upload Excel/CSV files, screenshots, PDFs, or paste data to bulk-import sales and payout reports.</div>
+
+```
+<!-- API Key Setup -->
+<div id="apiKeySection" style="margin-bottom:14px;">
+  <div class="form-group">
+    <label class="form-label">Anthropic API Key (for image/PDF/paste reading)</label>
+    <div style="display:flex;gap:8px;">
+      <input class="form-input" id="importApiKey" type="password" placeholder="sk-ant-..." style="flex:1;">
+      <button onclick="saveApiKey()" style="background:var(--accent);color:#0a0a0f;border:none;border-radius:10px;padding:8px 14px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Save</button>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px;">Stored locally in your browser. Needed for AI extraction from images, PDFs, and pasted text. Get one at console.anthropic.com</div>
+  </div>
+  <div id="apiKeyStatus" style="font-size:11px;margin-top:4px;display:none;"></div>
+</div>
+
+<!-- Import Mode Selector -->
+<div style="display:flex;gap:8px;margin-bottom:14px;">
+  <button class="import-mode-btn active" id="modeFile" onclick="setImportMode('file')">Upload File</button>
+  <button class="import-mode-btn" id="modePaste" onclick="setImportMode('paste')">Paste Data</button>
+</div>
+
+<!-- File Upload -->
+<div id="importFileSection">
+  <div id="dropZone" onclick="document.getElementById('importFileInput').click()" style="border:2px dashed var(--border);border-radius:14px;padding:30px 20px;text-align:center;cursor:pointer;transition:border-color 0.2s;">
+    <div style="font-size:28px;margin-bottom:8px;">📁</div>
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">Drop file here or click to upload</div>
+    <div style="font-size:11px;color:var(--muted);">Excel (.xlsx, .csv), Images (.png, .jpg), PDFs</div>
+  </div>
+  <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv,.png,.jpg,.jpeg,.pdf" style="display:none;" onchange="handleFileSelect(event)">
+</div>
+
+<!-- Paste Section -->
+<div id="importPasteSection" style="display:none;">
+  <textarea id="importPasteArea" class="form-input" placeholder="Paste your sales data, payout report, or email content here..." style="min-height:120px;resize:vertical;"></textarea>
+  <button class="btn-primary" onclick="processPastedData()" style="margin-top:10px;">Extract Data</button>
+</div>
+
+<!-- Import Type Selector -->
+<div id="importTypeSection" style="display:none;margin-top:14px;">
+  <div class="form-group">
+    <label class="form-label">What type of data is this?</label>
+    <select class="form-select" id="importType">
+      <option value="auto">Auto-detect</option>
+      <option value="sales">Sales Report (past sales to import)</option>
+      <option value="payout">Payout Report (mark what's been paid)</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Target Month</label>
+    <select class="form-select" id="importMonth"></select>
+  </div>
+</div>
+
+<!-- Processing Indicator -->
+<div id="importProcessing" style="display:none;text-align:center;padding:20px;">
+  <div style="font-size:24px;margin-bottom:8px;">⏳</div>
+  <div style="font-family:'Syne',sans-serif;font-weight:700;color:var(--accent);">Processing...</div>
+  <div style="font-size:11px;color:var(--muted);margin-top:4px;" id="importProcessingMsg">Reading your file with AI...</div>
+</div>
+
+<!-- Preview Table -->
+<div id="importPreview" style="display:none;margin-top:14px;">
+  <div class="section-header">
+    <div class="section-title" style="color:var(--accent);">Preview Import</div>
+    <span class="count-badge" id="importCountBadge">0 rows</span>
+  </div>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px;" id="importDetectedType"></div>
+  <div style="overflow-x:auto;margin-bottom:14px;">
+    <table id="importTable" style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead id="importTableHead"></thead>
+      <tbody id="importTableBody"></tbody>
+    </table>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn-primary" onclick="confirmImport()" style="flex:1;">Import All</button>
+    <button class="btn-primary" onclick="cancelImport()" style="flex:1;background:var(--surface);color:var(--text);border:1px solid var(--border);">Cancel</button>
+  </div>
+</div>
+
+<!-- Import Result -->
+<div id="importResult" style="display:none;margin-top:14px;"></div>
+```
+
   </div>
 </div>
 
@@ -907,9 +1009,433 @@ function renderSalesList(){
   }).join("");
 }
 function switchTab(tab){
-  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['add','sales','summary','rates'][i]===tab));
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['add','sales','import','summary','rates'][i]===tab));
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
   document.getElementById('panel-'+tab).classList.add('active');
+  if(tab==='import') initImportMonthSelect();
+}
+
+// ---- Import Feature ----
+let importedRows = [];
+let importExcluded = new Set();
+
+function saveApiKey() {
+  var key = document.getElementById('importApiKey').value.trim();
+  if (!key || !key.startsWith('sk-ant-')) {
+    showApiKeyStatus('Invalid key. Should start with sk-ant-...', true);
+    return;
+  }
+  localStorage.setItem('atg_anthropic_key', key);
+  showApiKeyStatus('API key saved!', false);
+}
+function getApiKey() { return localStorage.getItem('atg_anthropic_key') || ''; }
+function showApiKeyStatus(msg, isError) {
+  var el = document.getElementById('apiKeyStatus');
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--accent3)' : 'var(--accent)';
+  el.style.display = 'block';
+  setTimeout(function(){ el.style.display='none'; }, 3000);
+}
+
+// Load saved key on page load
+setTimeout(function(){
+  var k = getApiKey();
+  if(k) document.getElementById('importApiKey').value = k;
+}, 500);
+
+function setImportMode(mode) {
+  document.getElementById('modeFile').classList.toggle('active', mode==='file');
+  document.getElementById('modePaste').classList.toggle('active', mode==='paste');
+  document.getElementById('importFileSection').style.display = mode==='file' ? 'block' : 'none';
+  document.getElementById('importPasteSection').style.display = mode==='paste' ? 'block' : 'none';
+}
+
+function initImportMonthSelect() {
+  var sel = document.getElementById('importMonth');
+  if (!sel) return;
+  sel.innerHTML = '';
+  var months = [];
+  for(var y=2024;y<=2027;y++) for(var m=1;m<=12;m++) months.push(y+'-'+String(m).padStart(2,'0'));
+  months.sort().reverse().forEach(function(mo){
+    var o = document.createElement('option');
+    o.value = mo; o.textContent = getMonthLabel(mo);
+    if(mo === currentMonth) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+// Drag and drop
+document.addEventListener('DOMContentLoaded', function(){
+  var dz = document.getElementById('dropZone');
+  if(!dz) return;
+  dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', function(){ dz.classList.remove('dragover'); });
+  dz.addEventListener('drop', function(e){
+    e.preventDefault(); dz.classList.remove('dragover');
+    if(e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+  });
+});
+
+function handleFileSelect(e) {
+  if(e.target.files.length) processFile(e.target.files[0]);
+}
+
+async function processFile(file) {
+  var ext = file.name.split('.').pop().toLowerCase();
+  document.getElementById('importTypeSection').style.display = 'block';
+
+  if(ext === 'csv') {
+    var text = await file.text();
+    parseCSV(text);
+  } else if(ext === 'xlsx' || ext === 'xls') {
+    await parseExcel(file);
+  } else if(['png','jpg','jpeg','pdf'].includes(ext)) {
+    await extractWithAI(file);
+  } else {
+    alert('Unsupported file type: .' + ext);
+  }
+}
+
+function parseCSV(text) {
+  var lines = text.trim().split('\n');
+  if(lines.length < 2) { alert('CSV appears empty.'); return; }
+  var headers = lines[0].split(',').map(function(h){ return h.trim().replace(/^"|"$/g,''); });
+  var rows = [];
+  for(var i=1; i<lines.length; i++){
+    var vals = lines[i].split(',').map(function(v){ return v.trim().replace(/^"|"$/g,''); });
+    var row = {};
+    headers.forEach(function(h, j){ row[h] = vals[j] || ''; });
+    rows.push(row);
+  }
+  mapAndPreview(rows, headers);
+}
+
+async function parseExcel(file) {
+  showProcessing('Reading Excel file...');
+  // Load SheetJS from CDN
+  if(!window.XLSX) {
+    var script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    document.head.appendChild(script);
+    await new Promise(function(resolve){ script.onload = resolve; });
+  }
+  var data = await file.arrayBuffer();
+  var wb = XLSX.read(data, {type:'array'});
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var json = XLSX.utils.sheet_to_json(ws, {defval:''});
+  if(!json.length) { hideProcessing(); alert('No data found in spreadsheet.'); return; }
+  var headers = Object.keys(json[0]);
+  hideProcessing();
+  mapAndPreview(json, headers);
+}
+
+async function extractWithAI(file) {
+  var apiKey = getApiKey();
+  if(!apiKey) { alert('Please save your Anthropic API key first (above).'); return; }
+
+  showProcessing('Reading with AI... this may take a few seconds.');
+  var base64 = await fileToBase64(file);
+  var ext = file.name.split('.').pop().toLowerCase();
+  var mediaType = ext === 'pdf' ? 'application/pdf' : (ext === 'png' ? 'image/png' : 'image/jpeg');
+  var contentType = ext === 'pdf' ? 'document' : 'image';
+
+  var sourceObj = { type: 'base64', media_type: mediaType, data: base64 };
+  var contentBlock = { type: contentType, source: sourceObj };
+
+  try {
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: [
+            contentBlock,
+            { type: 'text', text: 'Extract ALL rows of data from this sales or payout report into a JSON array. Each object should include whatever fields are visible. Look for fields like: account/company name, product, amount/ACV, margin %, commission, payout rate, city, date, tier, paid status, order number, invoice number, rep name. Return ONLY a JSON array, no other text. If there are dollar amounts, return them as numbers without $ or commas. If there are percentages, return them as decimals (20% = 0.20). Example format: [{"account":"Company Name","amount":1234.56,"margin":0.20,"commission":123.45}]' }
+          ]
+        }]
+      })
+    });
+    var result = await response.json();
+    if(result.error) { hideProcessing(); alert('AI Error: ' + (result.error.message || JSON.stringify(result.error))); return; }
+    var text = result.content.map(function(c){ return c.text || ''; }).join('');
+    // Extract JSON from response
+    var jsonMatch = text.match(/\[[\s\S]*\]/);
+    if(!jsonMatch) { hideProcessing(); alert('Could not parse AI response. Try again or use CSV format.'); return; }
+    var rows = JSON.parse(jsonMatch[0]);
+    var headers = rows.length ? Object.keys(rows[0]) : [];
+    hideProcessing();
+    mapAndPreview(rows, headers);
+  } catch(err) {
+    hideProcessing();
+    alert('Error calling AI: ' + err.message);
+  }
+}
+
+async function processPastedData() {
+  var text = document.getElementById('importPasteArea').value.trim();
+  if(!text) { alert('Please paste some data first.'); return; }
+
+  // Try to parse as tab-separated or CSV first
+  var lines = text.split('\n');
+  if(lines.length >= 2) {
+    var sep = lines[0].includes('\t') ? '\t' : ',';
+    var headers = lines[0].split(sep).map(function(h){ return h.trim().replace(/^"|"$/g,''); });
+    if(headers.length >= 3) {
+      var rows = [];
+      for(var i=1; i<lines.length; i++){
+        if(!lines[i].trim()) continue;
+        var vals = lines[i].split(sep).map(function(v){ return v.trim().replace(/^"|"$/g,''); });
+        var row = {};
+        headers.forEach(function(h,j){ row[h] = vals[j] || ''; });
+        rows.push(row);
+      }
+      if(rows.length) { document.getElementById('importTypeSection').style.display='block'; mapAndPreview(rows, headers); return; }
+    }
+  }
+
+  // Fall back to AI extraction
+  var apiKey = getApiKey();
+  if(!apiKey) { alert('Data format not recognized. Please save your API key for AI extraction.'); return; }
+
+  showProcessing('Extracting data with AI...');
+  try {
+    var response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{
+          role: 'user',
+          content: 'Extract ALL rows of data from this sales or payout report into a JSON array. Each object should include whatever fields are visible. Look for fields like: account/company name, product, amount/ACV, margin %, commission, payout rate, city, date, tier, paid status, order number, rep name. Return ONLY a JSON array, no other text. Dollar amounts as numbers, percentages as decimals.\n\nData:\n' + text
+        }]
+      })
+    });
+    var result = await response.json();
+    var aiText = result.content.map(function(c){ return c.text || ''; }).join('');
+    var jsonMatch = aiText.match(/\[[\s\S]*\]/);
+    if(!jsonMatch) { hideProcessing(); alert('Could not parse the pasted data.'); return; }
+    var rows = JSON.parse(jsonMatch[0]);
+    var headers = rows.length ? Object.keys(rows[0]) : [];
+    hideProcessing();
+    document.getElementById('importTypeSection').style.display='block';
+    mapAndPreview(rows, headers);
+  } catch(err) {
+    hideProcessing();
+    alert('Error: ' + err.message);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){ resolve(reader.result.split(',')[1]); };
+    reader.onerror = function(){ reject(new Error('Failed to read file')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function showProcessing(msg) {
+  document.getElementById('importProcessing').style.display = 'block';
+  document.getElementById('importProcessingMsg').textContent = msg;
+  document.getElementById('importPreview').style.display = 'none';
+}
+function hideProcessing() {
+  document.getElementById('importProcessing').style.display = 'none';
+}
+
+// Field mapping - map various column names to our standard fields
+function mapField(header) {
+  var h = header.toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(h.match(/^(account|company|enduser|customer|tradename|companyname|endusertrade)$/)) return 'account';
+  if(h.match(/^(city|endusertradecity|tradecity)$/)) return 'city';
+  if(h.match(/^(product|description|productname|item)$/)) return 'product';
+  if(h.match(/^(amount|acv|acvbilling|billing|targetcurrency|pretaxtotal|pretax|total|saleamount|revenue)$/)) return 'amount';
+  if(h.match(/^(margin|marginpct|marginpercent|gp)$/)) return 'margin';
+  if(h.match(/^(commission|repcommission|commissionamt|commissionamount)$/)) return 'commission';
+  if(h.match(/^(atgcommission|atgcomm)$/)) return 'atgCommission';
+  if(h.match(/^(rate|payoutrate|repcommissionpercent|commissionpct|tierrate)$/)) return 'payoutRate';
+  if(h.match(/^(tier|tierlevel)$/)) return 'tier';
+  if(h.match(/^(date|attainmentdate|saledate|invoicedate|orderdate)$/)) return 'date';
+  if(h.match(/^(order|ordernumber|ordernum|orderno)$/)) return 'order';
+  if(h.match(/^(invoice|invoicenumber|invoicenum)$/)) return 'invoice';
+  if(h.match(/^(rep|agent|agentcontactname|repname|salesperson)$/)) return 'rep';
+  if(h.match(/^(category|type|saletype)$/)) return 'category';
+  if(h.match(/^(paid|paidstatus|status)$/)) return 'paid';
+  return header;
+}
+
+function mapAndPreview(rows, headers) {
+  if(!rows.length) { alert('No data rows found.'); return; }
+  importedRows = rows;
+  importExcluded = new Set();
+
+  // Map headers
+  var mappedHeaders = headers.map(mapField);
+
+  // Detect if this is a payout report or sales report
+  var hasPayout = mappedHeaders.includes('commission') || mappedHeaders.includes('atgCommission') || mappedHeaders.includes('payoutRate');
+  var hasAmount = mappedHeaders.includes('amount');
+  var detectedType = hasPayout ? 'Detected: Payout/Commission Report' : 'Detected: Sales Report';
+  document.getElementById('importDetectedType').textContent = detectedType;
+
+  // Build preview table
+  var thead = document.getElementById('importTableHead');
+  var tbody = document.getElementById('importTableBody');
+  var displayCols = mappedHeaders.slice(0, 8); // Show up to 8 columns
+
+  thead.innerHTML = '<tr><th style="width:30px;"></th>' + displayCols.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr>';
+
+  tbody.innerHTML = rows.map(function(row, idx){
+    var cells = displayCols.map(function(mappedH, colIdx){
+      var origH = headers[colIdx];
+      var val = row[origH] !== undefined ? row[origH] : '';
+      if(typeof val === 'number') val = val.toFixed ? (val < 1 && val > 0 ? (val*100).toFixed(1)+'%' : '$'+val.toFixed(2)) : val;
+      return '<td title="' + String(val).replace(/"/g,'&quot;') + '">' + val + '</td>';
+    }).join('');
+    return '<tr id="import-row-'+idx+'"><td><button class="import-row-toggle included" onclick="toggleImportRow('+idx+')">✓</button></td>' + cells + '</tr>';
+  }).join('');
+
+  document.getElementById('importCountBadge').textContent = rows.length + ' rows';
+  document.getElementById('importPreview').style.display = 'block';
+  document.getElementById('importTypeSection').style.display = 'block';
+}
+
+function toggleImportRow(idx) {
+  if(importExcluded.has(idx)) {
+    importExcluded.delete(idx);
+    document.getElementById('import-row-'+idx).classList.remove('row-excluded');
+    document.getElementById('import-row-'+idx).querySelector('.import-row-toggle').classList.add('included');
+    document.getElementById('import-row-'+idx).querySelector('.import-row-toggle').textContent = '✓';
+  } else {
+    importExcluded.add(idx);
+    document.getElementById('import-row-'+idx).classList.add('row-excluded');
+    document.getElementById('import-row-'+idx).querySelector('.import-row-toggle').classList.remove('included');
+    document.getElementById('import-row-'+idx).querySelector('.import-row-toggle').textContent = '✗';
+  }
+  var active = importedRows.length - importExcluded.size;
+  document.getElementById('importCountBadge').textContent = active + ' of ' + importedRows.length + ' rows';
+}
+
+async function confirmImport() {
+  if(!currentUser) { alert('Please log in first.'); return; }
+  var targetMonth = document.getElementById('importMonth').value || currentMonth;
+  var importType = document.getElementById('importType').value;
+  var count = 0;
+  var errors = 0;
+
+  showProcessing('Importing sales...');
+
+  for(var i=0; i<importedRows.length; i++){
+    if(importExcluded.has(i)) continue;
+    var raw = importedRows[i];
+    var headers = Object.keys(raw);
+    var mapped = {};
+    headers.forEach(function(h){ mapped[mapField(h)] = raw[h]; });
+
+    // Parse values
+    var amount = parseFloat(String(mapped.amount || mapped.total || '0').replace(/[$,]/g,'')) || 0;
+    var marginVal = parseFloat(String(mapped.margin || '0').replace(/[%$,]/g,''));
+    var marginPct = marginVal > 1 ? marginVal / 100 : marginVal;
+    var commission = parseFloat(String(mapped.commission || '0').replace(/[$,]/g,'')) || 0;
+    var payoutRate = parseFloat(String(mapped.payoutRate || '0').replace(/[%$,]/g,''));
+    if(payoutRate > 1) payoutRate = payoutRate / 100;
+    var tier = parseInt(mapped.tier) || 0;
+    var account = mapped.account || mapped.customer || 'Unknown';
+    var product = mapped.product || mapped.description || '';
+    var category = mapped.category || guessCategory(product);
+    var marginDol = marginPct > 0 ? amount * marginPct : (commission && payoutRate > 0 ? commission / payoutRate : 0);
+    if(!marginPct && amount > 0 && marginDol > 0) marginPct = marginDol / amount;
+    if(!payoutRate && marginDol > 0 && commission > 0) payoutRate = commission / marginDol;
+    if(!commission && marginDol > 0 && payoutRate > 0) commission = marginDol * payoutRate;
+
+    // Determine if this is a payout update (mark existing sale as paid)
+    var isPayout = importType === 'payout' || (importType === 'auto' && mapped.atgCommission);
+
+    if(isPayout && account !== 'Unknown') {
+      // Try to find matching sale and mark as paid
+      var found = salesCache.find(function(s){
+        return s.account && s.account.toLowerCase().indexOf(account.toLowerCase().substring(0,10)) >= 0 && Math.abs(s.amount - amount) < 1;
+      });
+      if(found) {
+        found.paid = true;
+        found.paidDate = new Date().toISOString().split('T')[0];
+        if(commission > 0) found.commission = commission;
+        await updateSaleInDb(found.id, {paid:true, paidDate:found.paidDate, commission:found.commission});
+        count++;
+        continue;
+      }
+    }
+
+    // Insert as new sale
+    var entry = {
+      date: mapped.date || new Date().toISOString().split('T')[0],
+      account: account,
+      order: mapped.order || mapped.invoice || '',
+      product: product,
+      category: category,
+      amount: amount,
+      marginPct: marginPct,
+      marginDol: marginDol,
+      payoutRate: payoutRate,
+      commission: commission,
+      tier: tier,
+      special: '',
+      noRevAttainment: false,
+      halfRev: false,
+      paid: isPayout,
+      paidDate: isPayout ? new Date().toISOString().split('T')[0] : null,
+    };
+
+    var result = await insertSaleToDb(entry, targetMonth);
+    if(result) count++; else errors++;
+  }
+
+  hideProcessing();
+  await loadSalesFromDb();
+  refresh();
+
+  var resultEl = document.getElementById('importResult');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div style="background:rgba(124,255,196,0.08);border:1px solid rgba(124,255,196,0.3);border-radius:10px;padding:14px;text-align:center;">'
+    + '<div style="font-size:20px;margin-bottom:4px;">✅</div>'
+    + '<div style="font-family:\'Syne\',sans-serif;font-weight:700;color:var(--accent);">' + count + ' rows imported</div>'
+    + (errors ? '<div style="font-size:11px;color:var(--accent3);margin-top:4px;">' + errors + ' errors</div>' : '')
+    + '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Month: ' + getMonthLabel(targetMonth) + '</div>'
+    + '</div>';
+  document.getElementById('importPreview').style.display = 'none';
+  importedRows = [];
+}
+
+function cancelImport() {
+  importedRows = [];
+  importExcluded = new Set();
+  document.getElementById('importPreview').style.display = 'none';
+  document.getElementById('importResult').style.display = 'none';
+  document.getElementById('importTypeSection').style.display = 'none';
+}
+
+function guessCategory(product) {
+  var p = (product || '').toLowerCase();
+  if(p.indexOf('bluebeam') >= 0 || p.indexOf('autodesk') >= 0 || p.indexOf('subscription') >= 0 || p.indexOf('panzura') >= 0 || p.indexOf('enscape') >= 0 || p.indexOf('diroots') >= 0) return 'Software';
+  if(p.indexOf('construction') >= 0 || p.indexOf('acc') >= 0) return 'Autodesk Construction Software';
+  if(p.indexOf('leica') >= 0 || p.indexOf('blk') >= 0 || p.indexOf('bimbox') >= 0 || p.indexOf('laptop') >= 0 || p.indexOf('hardware') >= 0 || p.indexOf('rtx') >= 0 || p.indexOf('ram') >= 0 || p.indexOf('ssd') >= 0 || p.indexOf('windows') >= 0 || p.indexOf('spatium') >= 0 || p.indexOf('ddr') >= 0) return 'Hardware';
+  if(p.indexOf('service') >= 0 || p.indexOf('consulting') >= 0 || p.indexOf('atg') >= 0 || p.indexOf('design') >= 0) return 'ATG Services';
+  if(p.indexOf('etraining') >= 0 || p.indexOf('global') >= 0) return 'Global eTraining';
+  return 'Software';
 }
 
 // Boot - auth overlay shows by default, initApp() handles the rest after login
@@ -917,6 +1443,7 @@ checkOnboard();
 </script>
 
 <!-- Edit Sale Modal -->
+
 <div class="edit-modal-overlay" id="editModalOverlay" onclick="closeEditIfBg(event)">
   <div class="edit-modal">
     <div class="edit-modal-header">
