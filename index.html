@@ -347,7 +347,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   </div>
   <div class="form-group">
     <label class="form-label">Target Month</label>
-    <select class="form-select" id="importMonth"></select>
+    <div style="font-size:11px;color:var(--accent);padding:8px 12px;background:rgba(124,255,196,0.05);border:1px solid rgba(124,255,196,0.2);border-radius:8px;">Auto-detect from dates in data. Falls back to current month if no date found.</div>
+    <select class="form-select" id="importMonth" style="margin-top:8px;">
+      <option value="auto">Auto-detect from dates</option>
+    </select>
   </div>
 </div>
 
@@ -1053,13 +1056,12 @@ function setImportMode(mode) {
 function initImportMonthSelect() {
   var sel = document.getElementById('importMonth');
   if (!sel) return;
-  sel.innerHTML = '';
+  sel.innerHTML = '<option value="auto">Auto-detect from dates</option>';
   var months = [];
   for(var y=2024;y<=2027;y++) for(var m=1;m<=12;m++) months.push(y+'-'+String(m).padStart(2,'0'));
   months.sort().reverse().forEach(function(mo){
     var o = document.createElement('option');
     o.value = mo; o.textContent = getMonthLabel(mo);
-    if(mo === currentMonth) o.selected = true;
     sel.appendChild(o);
   });
 }
@@ -1158,7 +1160,7 @@ async function extractWithAI(file) {
           role: 'user',
           content: [
             contentBlock,
-            { type: 'text', text: 'Extract ALL rows of data from this sales or payout report into a JSON array. Each object should include whatever fields are visible. Look for fields like: account/company name, product, amount/ACV, margin %, commission, payout rate, city, date, tier, paid status, order number, invoice number, rep name. Return ONLY a JSON array, no other text. If there are dollar amounts, return them as numbers without $ or commas. If there are percentages, return them as decimals (20% = 0.20). Example format: [{"account":"Company Name","amount":1234.56,"margin":0.20,"commission":123.45}]' }
+            { type: 'text', text: 'Extract ALL rows of data from this sales or payout report into a JSON array. Each object should include whatever fields are visible. Look for fields like: account/company name, product, amount/ACV, margin %, commission, payout rate, city, date (CRITICAL - always include any date field like attainment date, invoice date, order date, sale date in format MM/DD/YYYY or YYYY-MM-DD), tier, paid status, order number, invoice number, rep name. Return ONLY a JSON array, no other text. If there are dollar amounts, return them as numbers without $ or commas. If there are percentages, return them as decimals (20% = 0.20). Example format: [{"account":"Company Name","amount":1234.56,"margin":0.20,"commission":123.45,"date":"1/15/2026"}]' }
           ]
         }]
       })
@@ -1280,11 +1282,36 @@ function mapField(header) {
 
 function mapAndPreview(rows, headers) {
   if(!rows.length) { alert('No data rows found.'); return; }
+
+  // Map headers for field detection
+  var mappedHeaders = headers.map(mapField);
+
+  // Filter out empty/junk rows — must have a real account name OR a non-zero dollar amount
+  rows = rows.filter(function(row) {
+    var vals = Object.values(row);
+    // Skip if all values are empty
+    var hasAnyValue = vals.some(function(v) { return v !== '' && v !== null && v !== undefined; });
+    if(!hasAnyValue) return false;
+
+    // Check for a meaningful account/company name
+    var mapped = {};
+    headers.forEach(function(h){ mapped[mapField(h)] = row[h]; });
+    var account = String(mapped.account || mapped.customer || '').trim();
+    var amount = parseFloat(String(mapped.amount || mapped.total || '0').replace(/[$,]/g,'')) || 0;
+    var commission = parseFloat(String(mapped.commission || '0').replace(/[$,]/g,'')) || 0;
+
+    // Must have a real account name (not empty, not "unknown")
+    var hasAccount = account.length > 1 && account.toLowerCase() !== 'unknown' && account.toLowerCase() !== 'total' && account.toLowerCase() !== 'grand total';
+    // Must have some dollar amount > 0
+    var hasMoney = amount > 0 || commission > 0;
+
+    return hasAccount && hasMoney;
+  });
+
+  if(!rows.length) { alert('No valid data rows found. Rows need an account name and a dollar amount.'); return; }
+
   importedRows = rows;
   importExcluded = new Set();
-
-  // Map headers
-  var mappedHeaders = headers.map(mapField);
 
   // Detect if this is a payout report or sales report
   var hasPayout = mappedHeaders.includes('commission') || mappedHeaders.includes('atgCommission') || mappedHeaders.includes('payoutRate');
@@ -1332,10 +1359,11 @@ function toggleImportRow(idx) {
 
 async function confirmImport() {
   if(!currentUser) { alert('Please log in first.'); return; }
-  var targetMonth = document.getElementById('importMonth').value || currentMonth;
+  var monthSetting = document.getElementById('importMonth').value;
   var importType = document.getElementById('importType').value;
   var count = 0;
   var errors = 0;
+  var monthCounts = {};
 
   showProcessing('Importing sales...');
 
@@ -1362,17 +1390,34 @@ async function confirmImport() {
     if(!payoutRate && marginDol > 0 && commission > 0) payoutRate = commission / marginDol;
     if(!commission && marginDol > 0 && payoutRate > 0) commission = marginDol * payoutRate;
 
+    // Determine month from date in the row
+    var rowDate = mapped.date || mapped.attainmentDate || mapped.invoiceDate || mapped.orderDate || '';
+    var targetMonth = currentMonth; // fallback
+    var parsedDate = '';
+
+    if(monthSetting !== 'auto') {
+      targetMonth = monthSetting;
+    } else if(rowDate) {
+      var dm = parseImportDate(String(rowDate));
+      if(dm) {
+        targetMonth = dm.month;
+        parsedDate = dm.date;
+      }
+    }
+
+    if(!monthCounts[targetMonth]) monthCounts[targetMonth] = 0;
+    monthCounts[targetMonth]++;
+
     // Determine if this is a payout update (mark existing sale as paid)
     var isPayout = importType === 'payout' || (importType === 'auto' && mapped.atgCommission);
 
     if(isPayout && account !== 'Unknown') {
-      // Try to find matching sale and mark as paid
       var found = salesCache.find(function(s){
         return s.account && s.account.toLowerCase().indexOf(account.toLowerCase().substring(0,10)) >= 0 && Math.abs(s.amount - amount) < 1;
       });
       if(found) {
         found.paid = true;
-        found.paidDate = new Date().toISOString().split('T')[0];
+        found.paidDate = parsedDate || new Date().toISOString().split('T')[0];
         if(commission > 0) found.commission = commission;
         await updateSaleInDb(found.id, {paid:true, paidDate:found.paidDate, commission:found.commission});
         count++;
@@ -1382,7 +1427,7 @@ async function confirmImport() {
 
     // Insert as new sale
     var entry = {
-      date: mapped.date || new Date().toISOString().split('T')[0],
+      date: parsedDate || new Date().toISOString().split('T')[0],
       account: account,
       order: mapped.order || mapped.invoice || '',
       product: product,
@@ -1397,7 +1442,7 @@ async function confirmImport() {
       noRevAttainment: false,
       halfRev: false,
       paid: isPayout,
-      paidDate: isPayout ? new Date().toISOString().split('T')[0] : null,
+      paidDate: isPayout ? (parsedDate || new Date().toISOString().split('T')[0]) : null,
     };
 
     var result = await insertSaleToDb(entry, targetMonth);
@@ -1408,16 +1453,65 @@ async function confirmImport() {
   await loadSalesFromDb();
   refresh();
 
+  // Build month breakdown for the result message
+  var monthBreakdown = Object.keys(monthCounts).sort().map(function(mo){
+    return getMonthLabel(mo) + ': ' + monthCounts[mo] + ' sales';
+  }).join('<br>');
+
   var resultEl = document.getElementById('importResult');
   resultEl.style.display = 'block';
   resultEl.innerHTML = '<div style="background:rgba(124,255,196,0.08);border:1px solid rgba(124,255,196,0.3);border-radius:10px;padding:14px;text-align:center;">'
     + '<div style="font-size:20px;margin-bottom:4px;">✅</div>'
     + '<div style="font-family:\'Syne\',sans-serif;font-weight:700;color:var(--accent);">' + count + ' rows imported</div>'
     + (errors ? '<div style="font-size:11px;color:var(--accent3);margin-top:4px;">' + errors + ' errors</div>' : '')
-    + '<div style="font-size:11px;color:var(--muted);margin-top:4px;">Month: ' + getMonthLabel(targetMonth) + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:8px;">' + monthBreakdown + '</div>'
     + '</div>';
   document.getElementById('importPreview').style.display = 'none';
   importedRows = [];
+}
+
+// Parse various date formats into {date: 'YYYY-MM-DD', month: 'YYYY-MM'}
+function parseImportDate(str) {
+  if(!str) return null;
+  str = String(str).trim();
+  var d = null;
+
+  // Try: MM/DD/YYYY or M/D/YYYY
+  var mdy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if(mdy) { d = new Date(parseInt(mdy[3]), parseInt(mdy[1])-1, parseInt(mdy[2])); }
+
+  // Try: YYYY-MM-DD
+  if(!d) {
+    var ymd = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if(ymd) { d = new Date(parseInt(ymd[1]), parseInt(ymd[2])-1, parseInt(ymd[3])); }
+  }
+
+  // Try: Month DD, YYYY (e.g. "January 15, 2026")
+  if(!d) {
+    var named = str.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s*(\d{4})$/);
+    if(named) { d = new Date(named[0]); }
+  }
+
+  // Try: DD-Mon-YYYY (e.g. "15-Jan-2026")
+  if(!d) {
+    var dmy = str.match(/^(\d{1,2})[\/\-]([A-Za-z]+)[\/\-](\d{4})$/);
+    if(dmy) { d = new Date(dmy[0]); }
+  }
+
+  // Try: Excel serial number (5-digit number)
+  if(!d) {
+    var serial = parseFloat(str);
+    if(serial > 40000 && serial < 60000) {
+      d = new Date((serial - 25569) * 86400 * 1000);
+    }
+  }
+
+  if(!d || isNaN(d.getTime())) return null;
+
+  var yyyy = d.getFullYear();
+  var mm = String(d.getMonth()+1).padStart(2,'0');
+  var dd = String(d.getDate()).padStart(2,'0');
+  return { date: yyyy+'-'+mm+'-'+dd, month: yyyy+'-'+mm };
 }
 
 function cancelImport() {
