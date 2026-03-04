@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>ATG Commission Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0a0f;--surface:#13131a;--card:#1a1a24;--border:#2a2a3a;--accent:#7cffc4;--accent2:#5b8eff;--accent3:#ff6b6b;--gold:#ffd166;--text:#f0f0f8;--muted:#6b6b88;}
@@ -131,13 +132,29 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
 </head>
 <body>
 
-<!-- Onboarding overlay -->
-<div class="onboard-overlay" id="onboardOverlay" style="display:none">
+<!-- Auth overlay -->
+<div class="onboard-overlay" id="authOverlay" style="display:flex">
   <div class="onboard-card">
-    <div class="onboard-title">Welcome to ATG</div>
-    <div class="onboard-sub">Enter your name to get started. Your sales data will be saved locally on this device.</div>
-    <input class="form-input" id="onboardName" type="text" placeholder="Your full name">
-    <button class="btn-primary" onclick="finishOnboard()">Get Started</button>
+    <div class="onboard-title">ATG Commission Tracker</div>
+    <div class="onboard-sub" id="authSubtitle">Sign in or create an account to track your commissions.</div>
+    <div id="authError" style="color:var(--accent3);font-size:11px;margin-bottom:10px;display:none;"></div>
+    <div id="authNameGroup" class="form-group" style="margin-bottom:10px;">
+      <label class="form-label">Full Name</label>
+      <input class="form-input" id="authName" type="text" placeholder="Your full name">
+    </div>
+    <div class="form-group" style="margin-bottom:10px;">
+      <label class="form-label">Email</label>
+      <input class="form-input" id="authEmail" type="email" placeholder="you@company.com">
+    </div>
+    <div class="form-group" style="margin-bottom:10px;">
+      <label class="form-label">Password</label>
+      <input class="form-input" id="authPassword" type="password" placeholder="Min 6 characters">
+    </div>
+    <button class="btn-primary" id="authPrimaryBtn" onclick="handleSignUp()">Sign Up</button>
+    <button class="btn-primary" id="authSecondaryBtn" onclick="handleLogin()" style="margin-top:8px;background:var(--surface);color:var(--text);border:1px solid var(--border);">Log In</button>
+    <div style="text-align:center;margin-top:12px;">
+      <a href="#" id="authToggle" onclick="toggleAuthMode(event)" style="color:var(--muted);font-size:11px;">Already have an account? Log in</a>
+    </div>
   </div>
 </div>
 
@@ -150,7 +167,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-
   <div class="user-bar">
     <span class="user-label">Rep:</span>
     <span id="repNameDisplay" style="flex:1;font-family:'Syne',sans-serif;font-weight:600;font-size:13px;color:var(--accent);"></span>
-    <button onclick="resetAllData()" style="background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:4px 8px;border-radius:6px;cursor:pointer;">Reset</button>
+    <button onclick="handleLogout()" style="background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:4px 8px;border-radius:6px;cursor:pointer;">Logout</button>
   </div>
 </div>
 <div class="legacy-banner" id="legacyBanner">📋 Legacy comp plan (4-tier) — view only</div>
@@ -364,52 +381,150 @@ function getMonthLabel(k){const[y,m]=k.split('-');return new Date(y,m-1,1).toLoc
 // Calculate revenue that counts toward attainment (respects noRevAttainment and halfRev)
 function attainAmt(s){if(s.noRevAttainment)return 0;return s.halfRev?s.amount*0.5:s.amount;}
 
-// ---- Storage ----
-function loadAll(){try{return JSON.parse(localStorage.getItem('atg_tracker_v1')||'{}');}catch{return{};}}
-function saveAll(){try{localStorage.setItem('atg_tracker_v1',JSON.stringify(db));}catch{}}
 
-let db = loadAll();
-if(!db.reps) db.reps=[];
-if(!db.sales) db.sales={};
+// ---- Supabase Setup ----
+const SUPABASE_URL = 'https://jjpqkmtdwtgfyuarstoc.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_N0Oye1OT_TWNez7gKxTgNg_-BUbm2WB';
+const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null;
+let salesCache = [];
 
-let currentRep = localStorage.getItem('atg_current_rep')||'';
-let currentMonth = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
-let salesFilter = 'all';
-
-// ---- Onboarding ----
-function checkOnboard(){
-  if(!currentRep){
-    document.getElementById('onboardOverlay').style.display='flex';
-  } else {
-    document.getElementById('onboardOverlay').style.display='none';
-    document.getElementById('repNameDisplay').textContent=currentRep;
-    if(!db.reps.includes(currentRep)) db.reps.push(currentRep);
-    if(!db.sales[currentRep]) db.sales[currentRep]={};
-    saveAll();
-    refresh();
-  }
+// ---- Auth Functions ----
+let authMode = 'signup';
+function toggleAuthMode(e) {
+  e.preventDefault();
+  authMode = authMode === 'signup' ? 'login' : 'signup';
+  document.getElementById('authNameGroup').style.display = authMode === 'signup' ? 'block' : 'none';
+  document.getElementById('authPrimaryBtn').style.display = authMode === 'signup' ? 'block' : 'none';
+  document.getElementById('authSecondaryBtn').style.display = authMode === 'login' ? 'block' : 'none';
+  document.getElementById('authSubtitle').textContent = authMode === 'signup'
+    ? 'Sign in or create an account to track your commissions.'
+    : 'Welcome back! Enter your email and password.';
+  document.getElementById('authToggle').textContent = authMode === 'signup'
+    ? 'Already have an account? Log in'
+    : 'Need an account? Sign up';
+  document.getElementById('authError').style.display = 'none';
 }
-function finishOnboard(){
-  const name=document.getElementById('onboardName').value.trim();
-  if(!name){alert('Please enter your name.');return;}
-  currentRep=name;
-  localStorage.setItem('atg_current_rep',name);
-  if(!db.reps.includes(name)) db.reps.push(name);
-  if(!db.sales[name]) db.sales[name]={};
-  saveAll();
-  document.getElementById('onboardOverlay').style.display='none';
-  document.getElementById('repNameDisplay').textContent=name;
+async function handleSignUp() {
+  var name = document.getElementById('authName').value.trim();
+  var email = document.getElementById('authEmail').value.trim();
+  var password = document.getElementById('authPassword').value;
+  var errorEl = document.getElementById('authError');
+  if (!name || !email || !password) { errorEl.textContent='Please fill in all fields.'; errorEl.style.display='block'; return; }
+  if (password.length < 6) { errorEl.textContent='Password must be at least 6 characters.'; errorEl.style.display='block'; return; }
+  errorEl.style.display='none';
+  var result = await _supabase.auth.signUp({ email: email, password: password, options: { data: { full_name: name } } });
+  if (result.error) { errorEl.textContent=result.error.message; errorEl.style.display='block'; }
+  else { await initApp(result.data.user); }
+}
+async function handleLogin() {
+  var email = document.getElementById('authEmail').value.trim();
+  var password = document.getElementById('authPassword').value;
+  var errorEl = document.getElementById('authError');
+  if (!email || !password) { errorEl.textContent='Please fill in email and password.'; errorEl.style.display='block'; return; }
+  errorEl.style.display='none';
+  var result = await _supabase.auth.signInWithPassword({ email: email, password: password });
+  if (result.error) { errorEl.textContent=result.error.message; errorEl.style.display='block'; }
+  else { await initApp(result.data.user); }
+}
+async function handleLogout() {
+  await _supabase.auth.signOut();
+  currentUser = null; currentRep = ''; salesCache = [];
+  document.getElementById('authOverlay').style.display = 'flex';
+}
+async function initApp(user) {
+  currentUser = user;
+  document.getElementById('authOverlay').style.display = 'none';
+  var profileResult = await _supabase.from('profiles').select('*').eq('id', user.id).single();
+  if (profileResult.data) { currentRep = profileResult.data.full_name; currentUser.role = profileResult.data.role; }
+  else { currentRep = user.email; currentUser.role = 'rep'; }
+  document.getElementById('repNameDisplay').textContent = currentRep;
+  initMonthSelect();
+  await loadSalesFromDb();
   refresh();
 }
+_supabase.auth.getSession().then(function(result) { if (result.data.session) initApp(result.data.session.user); });
 
-function resetAllData(){
-  if(!confirm('This will wipe ALL your data. Any sales you\'ve logged will be LOST. Continue?')) return;
-  localStorage.removeItem('atg_tracker_v1');
-  localStorage.removeItem('atg_current_rep');
-  location.reload();
+// ---- Supabase Storage ----
+async function loadSalesFromDb() {
+  var result = await _supabase.from('sales').select('*')
+    .eq('user_id', currentUser.id).eq('month', currentMonth)
+    .order('created_at', { ascending: false });
+  salesCache = (result.data || []).map(function(row) {
+    return {
+      id: row.id, date: row.date, account: row.account, order: row.order_number,
+      product: row.product, category: row.category,
+      amount: parseFloat(row.amount), marginPct: parseFloat(row.margin_pct),
+      marginDol: parseFloat(row.margin_dol), payoutRate: parseFloat(row.payout_rate),
+      commission: parseFloat(row.commission), tier: row.tier,
+      special: row.special || '', noRevAttainment: row.no_rev_attainment,
+      halfRev: row.half_rev, pendingTier: row.pending_tier,
+      lockedRate: row.locked_rate, paid: row.paid, paidDate: row.paid_date,
+      rep: row.rep, myApsGroupId: row.myaps_group_id,
+      myApsYear: row.myaps_year, myApsTerm: row.myaps_term,
+    };
+  });
+  return salesCache;
+}
+function getSales() { return salesCache; }
+function setSales(s) { salesCache = s; }
+
+async function insertSaleToDb(saleObj, targetMonth) {
+  var row = {
+    user_id: currentUser.id, month: targetMonth || currentMonth,
+    date: saleObj.date, account: saleObj.account, order_number: saleObj.order || '',
+    product: saleObj.product, category: saleObj.category,
+    amount: saleObj.amount, margin_pct: saleObj.marginPct, margin_dol: saleObj.marginDol,
+    payout_rate: saleObj.payoutRate, commission: saleObj.commission, tier: saleObj.tier,
+    special: saleObj.special || '', no_rev_attainment: saleObj.noRevAttainment || false,
+    half_rev: saleObj.halfRev || false, pending_tier: saleObj.pendingTier || false,
+    locked_rate: saleObj.lockedRate || false, paid: saleObj.paid || false,
+    paid_date: saleObj.paidDate || null, rep: currentRep,
+  };
+  var insertResult = await _supabase.from('sales').insert(row).select().single();
+  if (insertResult.error) { console.error('Insert error:', insertResult.error); alert('Error saving: ' + insertResult.error.message); return null; }
+  return insertResult.data;
+}
+async function updateSaleInDb(id, updates) {
+  var row = {};
+  if ('account' in updates) row.account = updates.account;
+  if ('order' in updates) row.order_number = updates.order;
+  if ('product' in updates) row.product = updates.product;
+  if ('category' in updates) row.category = updates.category;
+  if ('date' in updates) row.date = updates.date;
+  if ('amount' in updates) row.amount = updates.amount;
+  if ('marginPct' in updates) row.margin_pct = updates.marginPct;
+  if ('marginDol' in updates) row.margin_dol = updates.marginDol;
+  if ('payoutRate' in updates) row.payout_rate = updates.payoutRate;
+  if ('commission' in updates) row.commission = updates.commission;
+  if ('tier' in updates) row.tier = updates.tier;
+  if ('special' in updates) row.special = updates.special;
+  if ('noRevAttainment' in updates) row.no_rev_attainment = updates.noRevAttainment;
+  if ('halfRev' in updates) row.half_rev = updates.halfRev;
+  if ('pendingTier' in updates) row.pending_tier = updates.pendingTier;
+  if ('lockedRate' in updates) row.locked_rate = updates.lockedRate;
+  if ('paid' in updates) row.paid = updates.paid;
+  if ('paidDate' in updates) row.paid_date = updates.paidDate;
+  var updateResult = await _supabase.from('sales').update(row).eq('id', id);
+  if (updateResult.error) console.error('Update error:', updateResult.error);
+}
+async function deleteSaleFromDb(id) {
+  var delResult = await _supabase.from('sales').delete().eq('id', id);
+  if (delResult.error) console.error('Delete error:', delResult.error);
 }
 
-// ---- Month select ----
+let currentMonth = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+let currentRep = '';
+let salesFilter = 'all';
+
+function checkOnboard() {
+  if (!currentUser) { document.getElementById('authOverlay').style.display = 'flex'; }
+}
+function finishOnboard() { /* handled by auth now */ }
+function resetAllData() {
+  if(!confirm('This will delete ALL your sales data permanently. Continue?')) return;
+  _supabase.from('sales').delete().eq('user_id', currentUser.id).then(function() { salesCache=[]; refresh(); alert('All data cleared.'); });
+}
 function initMonthSelect(){
   const sel=document.getElementById('monthSelect');
   sel.innerHTML='';
@@ -424,15 +539,14 @@ function initMonthSelect(){
   });
   document.getElementById('currentMonthBadge').textContent=getMonthLabel(currentMonth);
 }
-function changeMonth(){
+async function changeMonth(){
   currentMonth=document.getElementById('monthSelect').value;
   document.getElementById('currentMonthBadge').textContent=getMonthLabel(currentMonth);
+  if(currentUser) await loadSalesFromDb();
   refresh();
 }
 
-// ---- Sales CRUD ----
-function getSales(){return(db.sales[currentRep]&&db.sales[currentRep][currentMonth])||[];}
-function setSales(s){if(!db.sales[currentRep])db.sales[currentRep]={};db.sales[currentRep][currentMonth]=s;saveAll();}
+// ---- Sales CRUD (old localStorage versions removed, using Supabase above) ----
 
 // ---- Form ----
 function updateMarginPreview(){
@@ -510,8 +624,8 @@ function updatePreview(){
   document.getElementById('previewRate').textContent=(pRate*100).toFixed(1)+'%'+(legacy?' (legacy)':' (Tier '+tier+')')+(isMyApsYr23?' · MYABs comm only':'')+(specialVal==='myaps_multi'?' · Yr 1 rate':'');
   document.getElementById('previewCommission').textContent=fmt(comm)+(specialVal==='myaps_multi'?' (Yr 1 — future yrs auto-scheduled)':'');
 }
-function addSale(){
-  if(!currentRep){alert('Please set your name first.');return;}
+async function addSale(){
+  if(!currentRep){alert('Please log in first.');return;}
   const acct=document.getElementById('inputAccount').value.trim();
   const order=document.getElementById('inputOrder').value.trim();
   const prod=document.getElementById('inputProduct').value;
@@ -539,44 +653,39 @@ function addSale(){
   if(special==='myaps_multi'){
     const term=parseInt(document.getElementById('inputMyApsTerm').value)||3;
     const startMonth=document.getElementById('inputMyApsStart').value;
-    if(!db.sales[currentRep])db.sales[currentRep]={};
+    const legacyLock=isLegacy(startMonth);
     for(let yr=1;yr<=term;yr++){
       const targetMonth=addMonths(startMonth,12*(yr-1));
       const isYr1=(yr===1);
-      // Legacy sales (pre-Feb 2026): lock Yr2/3 to same tier & rate as Yr1
-      const legacyLock=isLegacy(startMonth);
       const entry={
-        id:baseId+(yr*1000),
         date:new Date().toISOString().split('T')[0],
-        account:acct,order,product:prod,category:cat,
+        account:acct,order:order,product:prod,category:cat,
         amount:amt,marginPct:mar,marginDol:md,
         payoutRate:isYr1?pRate:(legacyLock?pRate:0),
         commission:isYr1?comm:(legacyLock?comm:0),
-        tier:isYr1?tier:(legacyLock?tier:'pending'),
+        tier:isYr1?tier:(legacyLock?tier:0),
         special:isYr1?special:'myab_yr23',
         noRevAttainment:!isYr1,
-        myApsGroupId:baseId,
-        myApsYear:yr,
-        myApsTerm:term,
         pendingTier:isYr1?false:(legacyLock?false:true),
         lockedRate:legacyLock&&!isYr1,
         halfRev:halfRev,
-        rep:currentRep
       };
-      const existing=(db.sales[currentRep][targetMonth])||[];
-      existing.unshift(entry);
-      db.sales[currentRep][targetMonth]=existing;
+      await insertSaleToDb(entry, targetMonth);
     }
-    saveAll();
     const start=document.getElementById('inputMyApsStart').value;
-    const legacyNote=legacyLock?' (locked to Yr 1 rate)':'';
-    const msg='✅ MYABs sale scheduled!\n\nYr 1: '+getMonthLabel(start)+' — attainment + commission\n'+(term>=2?'Yr 2: '+getMonthLabel(addMonths(start,12))+' — commission only'+(legacyLock?' (Yr1 rate locked)':' (tier set when due)')+'\n':'')+(term>=3?'Yr 3: '+getMonthLabel(addMonths(start,24))+' — commission only'+(legacyLock?' (Yr1 rate locked)':' (tier set when due)'):'');
+    const msg='MYABs sale scheduled!\n\nYr 1: '+getMonthLabel(start)+' — attainment + commission\n'+(term>=2?'Yr 2: '+getMonthLabel(addMonths(start,12))+' — commission only\n':'')+(term>=3?'Yr 3: '+getMonthLabel(addMonths(start,24))+' — commission only':'');
     alert(msg);
   } else {
-    const sales=getSales();
-    sales.unshift({id:baseId,date:new Date().toISOString().split('T')[0],account:acct,order,product:prod,category:cat,amount:amt,marginPct:mar,marginDol:md,payoutRate:pRate,commission:comm,tier,special,noRevAttainment,halfRev,rep:currentRep});
-    setSales(sales);
+    const entry={
+      date:new Date().toISOString().split('T')[0],
+      account:acct,order:order,product:prod,category:cat,
+      amount:amt,marginPct:mar,marginDol:md,
+      payoutRate:pRate,commission:comm,tier:tier,
+      special:special,noRevAttainment:noRevAttainment,halfRev:halfRev,
+    };
+    await insertSaleToDb(entry, currentMonth);
   }
+  await loadSalesFromDb();
 
   ['inputAccount','inputOrder','inputAmount','inputPayoutRate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('inputProduct').value='';
@@ -630,16 +739,10 @@ function toggleEditMyab() {
   var show = v==='myab_yr23';
   document.getElementById('editMyabSection').style.opacity = show?'1':'0.4';
 }
-function saveEdit() {
+async function saveEdit() {
   var id = parseInt(document.getElementById('editSaleId').value);
-  var foundMonth = null, foundIdx = -1;
-  Object.keys(db.sales[currentRep] || {}).forEach(function(mo) {
-    (db.sales[currentRep][mo] || []).forEach(function(x, i) {
-      if(x.id === id) { foundMonth = mo; foundIdx = i; }
-    });
-  });
-  if(!foundMonth) { alert('Error: sale not found'); return; }
-  var s = db.sales[currentRep][foundMonth][foundIdx];
+  var s = salesCache.find(function(x){return x.id===id;});
+  if(!s) { alert('Error: sale not found'); return; }
   var acct = document.getElementById('editAccount').value.trim();
   if(acct) s.account = acct;
   s.order    = document.getElementById('editOrder').value.trim();
@@ -662,119 +765,37 @@ function saveEdit() {
   s.paid            = document.getElementById('editPaid').value === 'true';
   s.paidDate        = document.getElementById('editPaidDate').value || null;
   s.halfRev         = document.getElementById('editHalfRev').checked;
-  var gid   = document.getElementById('editMyabGroupId').value.trim();
-  var yrNum = parseInt(document.getElementById('editMyabYear').value);
-  var term  = parseInt(document.getElementById('editMyabTerm').value);
-  if(isNaN(yrNum) || yrNum < 1) yrNum = 1;
-  if(isNaN(term)  || term  < 2) term  = 3;
-  var isMyabSpecial = s.special === 'myab_yr23' || s.special === 'myaps_multi';
-  if(gid && isMyabSpecial) {
-    s.myApsGroupId    = gid;
-    s.myApsYear       = yrNum;
-    s.myApsTerm       = term;
-    s.noRevAttainment = (yrNum > 1);
-    if(yrNum > 1) s.special = 'myab_yr23';
-    s.pendingTier     = (yrNum > 1);
-    saveAll();
-    var takenYears = {};
-    Object.keys(db.sales[currentRep]).forEach(function(mo) {
-      (db.sales[currentRep][mo] || []).forEach(function(x) {
-        if(String(x.myApsGroupId) === String(gid)) {
-          var y = parseInt(x.myApsYear);
-          if(!isNaN(y)) takenYears[y] = mo;
-        }
-      });
-    });
-    var baseMonth = addMonths(foundMonth, -12 * (yrNum - 1));
-    var created = [];
-    // Check if Yr1 base month is legacy — if so, lock all years to Yr1 rate
-    var legacyLock = isLegacy(baseMonth);
-    for(var yr = 1; yr <= term; yr++) {
-      if(takenYears[yr] !== undefined) continue;
-      var tgtMo = addMonths(baseMonth, 12 * (yr - 1));
-      if(!db.sales[currentRep][tgtMo]) db.sales[currentRep][tgtMo] = [];
-      var entry = {
-        id:              Date.now() + yr * 1009 + Math.floor(Math.random() * 499),
-        date:            tgtMo + '-15',
-        account:         s.account,
-        order:           s.order,
-        product:         s.product,
-        category:        s.category,
-        amount:          s.amount,
-        marginPct:       s.marginPct,
-        marginDol:       s.marginDol,
-        payoutRate:      yr === 1 ? s.payoutRate : (legacyLock ? s.payoutRate : 0),
-        commission:      yr === 1 ? s.commission : (legacyLock ? s.commission : 0),
-        tier:            yr === 1 ? (s.tier || 0) : (legacyLock ? (s.tier || 0) : 'pending'),
-        special:         yr === 1 ? '' : 'myab_yr23',
-        noRevAttainment: yr !== 1,
-        myApsGroupId:    gid,
-        myApsYear:       yr,
-        myApsTerm:       term,
-        pendingTier:     yr === 1 ? false : (legacyLock ? false : true),
-        lockedRate:      legacyLock && yr !== 1,
-        halfRev:         s.halfRev||false,
-        rep:             currentRep
-      };
-      db.sales[currentRep][tgtMo].unshift(entry);
-      created.push('Yr ' + yr + ' -> ' + getMonthLabel(tgtMo));
-    }
-    saveAll();
-    var sel = document.getElementById('monthSelect');
-    for(var y2 = 1; y2 <= term; y2++) {
-      var pmo = addMonths(baseMonth, 12 * (y2 - 1));
-      var alreadyIn = false;
-      for(var oi = 0; oi < sel.options.length; oi++) {
-        if(sel.options[oi].value === pmo) { alreadyIn = true; break; }
-      }
-      if(!alreadyIn) {
-        var opt = document.createElement('option');
-        opt.value = pmo; opt.textContent = getMonthLabel(pmo);
-        var inserted = false;
-        for(var oj = 0; oj < sel.options.length; oj++) {
-          if(sel.options[oj].value > pmo) { sel.insertBefore(opt, sel.options[oj]); inserted = true; break; }
-        }
-        if(!inserted) sel.appendChild(opt);
-      }
-    }
-    closeEdit();
-    if(created.length) {
-      var jumpTo = addMonths(baseMonth, 12);
-      currentMonth = jumpTo;
-      sel.value = jumpTo;
-      document.getElementById('currentMonthBadge').textContent = getMonthLabel(jumpTo);
-      refresh();
-      alert('MYABs entries created:\n\n' + created.join('\n') + '\n\nNow showing ' + getMonthLabel(jumpTo) + '.');
-    } else {
-      refresh();
-      alert('MYAB group saved. All ' + term + ' years already exist.');
-    }
-  } else {
-    if(!isMyabSpecial) {
-      delete s.myApsGroupId; delete s.myApsYear; delete s.myApsTerm; delete s.pendingTier;
-    }
-    saveAll();
-    closeEdit();
-    refresh();
-  }
+
+  await updateSaleInDb(id, {
+    account: s.account, order: s.order, product: s.product, category: s.category,
+    date: s.date, amount: s.amount, marginPct: s.marginPct, marginDol: s.marginDol,
+    payoutRate: s.payoutRate, commission: s.commission, special: s.special,
+    noRevAttainment: s.noRevAttainment, paid: s.paid, paidDate: s.paidDate, halfRev: s.halfRev,
+  });
+
+  closeEdit();
+  await loadSalesFromDb();
+  refresh();
 }
 
-function togglePaid(id){
-  var sales=getSales();
-  var s=sales.find(function(x){return x.id===id;});
+async function togglePaid(id){
+  var s=salesCache.find(function(x){return x.id===id;});
   if(!s) return;
   s.paid=!s.paid;
   s.paidDate=s.paid?new Date().toISOString().split('T')[0]:null;
-  setSales(sales); renderSalesList();
+  await updateSaleInDb(id, {paid:s.paid, paidDate:s.paidDate});
+  renderSalesList();
 }
 function setFilter(f){
   salesFilter=f;
   document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.toggle('active',b.dataset.filter===f);});
   renderSalesList();
 }
-function deleteSale(id){
+async function deleteSale(id){
   if(!confirm('Delete this sale?'))return;
-  setSales(getSales().filter(s=>s.id!==id));refresh();
+  await deleteSaleFromDb(id);
+  await loadSalesFromDb();
+  refresh();
 }
 
 // ---- Render ----
@@ -796,7 +817,10 @@ function refresh(){
         const t=getTierNew(attainRevBase,false);
         const r=getPayoutNew(s.category,t);
         const c=s.marginDol*r;
-        if(s.tier!==t||Math.abs(s.commission-c)>0.001){s.tier=t;s.payoutRate=r;s.commission=c;needsSave=true;}
+        if(s.tier!==t||Math.abs(s.commission-c)>0.001){
+          s.tier=t;s.payoutRate=r;s.commission=c;needsSave=true;
+          if(currentUser) updateSaleInDb(s.id, {tier:t, payoutRate:r, commission:c});
+        }
       }
     });
     if(needsSave)setSales(sales);
@@ -888,9 +912,8 @@ function switchTab(tab){
   document.getElementById('panel-'+tab).classList.add('active');
 }
 
-// Boot
+// Boot - auth overlay shows by default, initApp() handles the rest after login
 checkOnboard();
-initMonthSelect();
 </script>
 
 <!-- Edit Sale Modal -->
