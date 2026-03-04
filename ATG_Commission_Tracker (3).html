@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ATG Commission Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0f;--surface:#13131a;--card:#1a1a24;--border:#2a2a3a;--accent:#7cffc4;--accent2:#5b8eff;--accent3:#ff6b6b;--gold:#ffd166;--text:#f0f0f8;--muted:#6b6b88;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;padding-bottom:100px;}
+.header{background:linear-gradient(135deg,#0d0d18,#131320);border-bottom:1px solid var(--border);padding:20px 16px 16px;position:sticky;top:0;z-index:100;}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--accent);}
+.month-badge{font-size:11px;color:var(--muted);background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:20px;}
+.month-selector select{background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;width:100%;}
+.user-bar{display:flex;gap:8px;align-items:center;margin-top:10px;}
+.user-bar select{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;}
+.user-label{font-size:11px;color:var(--muted);white-space:nowrap;}
+.legacy-banner{background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.3);border-radius:10px;padding:8px 12px;margin:10px 16px 0;font-size:11px;color:var(--gold);display:none;}
+.legacy-banner.show{display:block;}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;position:relative;overflow:hidden;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.stat-card.green::before{background:var(--accent);}
+.stat-card.blue::before{background:var(--accent2);}
+.stat-card.gold::before{background:var(--gold);}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.stat-value{font-family:'Syne',sans-serif;font-weight:700;font-size:22px;}
+.stat-value.accent{color:var(--accent);}
+.stat-value.gold{color:var(--gold);}
+.tier-section{padding:0 16px 14px;}
+.tier-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.tier-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.tier-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
+.tier-current{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--gold);background:rgba(255,209,102,0.1);border:1px solid rgba(255,209,102,0.3);padding:3px 10px;border-radius:20px;}
+.tier-progress-bar{background:var(--surface);border-radius:8px;height:8px;overflow:hidden;margin-bottom:8px;}
+.tier-progress-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width 0.6s ease;}
+.tier-info{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+.tier-tiers{display:grid;gap:6px;margin-top:12px;}
+.tier-tiers.two-col{grid-template-columns:1fr 1fr;}
+.tier-tiers.four-col{grid-template-columns:repeat(4,1fr);}
+.tier-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center;}
+.tier-item.active{border-color:var(--gold);background:rgba(255,209,102,0.05);}
+.tier-item-name{font-size:10px;color:var(--muted);margin-bottom:2px;}
+.tier-item-rate{font-family:'Syne',sans-serif;font-weight:700;font-size:12px;color:var(--text);}
+.tier-item.active .tier-item-rate{color:var(--gold);}
+.tier-item-range{font-size:9px;color:var(--muted);margin-top:2px;}
+.tabs{display:flex;gap:4px;padding:0 16px 14px;}
+.tab{flex:1;padding:9px 4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all 0.2s;text-align:center;}
+.tab.active{background:var(--accent);border-color:var(--accent);color:#0a0a0f;font-weight:500;}
+.panel{display:none;padding:0 16px;}
+.panel.active{display:block;}
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px;}
+.form-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:16px;color:var(--accent);}
+.form-group{margin-bottom:12px;}
+.form-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:block;}
+.form-input,.form-select{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;padding:11px 14px;transition:border-color 0.2s;}
+.form-input:focus,.form-select:focus{outline:none;border-color:var(--accent);}
+.form-input::placeholder{color:var(--muted);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.commission-preview{background:rgba(124,255,196,0.05);border:1px solid rgba(124,255,196,0.2);border-radius:10px;padding:12px 14px;margin-top:4px;display:none;}
+.commission-preview.show{display:block;}
+.preview-row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--muted);}
+.preview-total{display:flex;justify-content:space-between;font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--accent);padding-top:8px;border-top:1px solid rgba(124,255,196,0.2);margin-top:8px;}
+.btn-primary{width:100%;background:var(--accent);color:#0a0a0f;border:none;border-radius:12px;padding:14px;font-family:'Syne',sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-top:14px;transition:opacity 0.2s,transform 0.1s;}
+.btn-primary:active{transform:scale(0.98);opacity:0.9;}
+.margin-note{font-size:10px;color:var(--muted);margin-top:4px;font-style:italic;}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.section-title{font-family:'Syne',sans-serif;font-weight:700;font-size:15px;}
+.count-badge{font-size:11px;background:var(--surface);border:1px solid var(--border);padding:3px 8px;border-radius:20px;color:var(--muted);}
+.sale-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;}
+.sale-card.mine{border-color:rgba(124,255,196,0.25);}
+.sale-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.sale-account{font-family:'Syne',sans-serif;font-weight:600;font-size:14px;}
+.sale-commission{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;color:var(--accent);}
+.sale-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.meta-chip{font-size:10px;padding:3px 8px;border-radius:20px;background:var(--surface);border:1px solid var(--border);color:var(--muted);}
+.meta-chip.cat-s{border-color:rgba(91,142,255,0.4);color:var(--accent2);}
+.meta-chip.cat-svc{border-color:rgba(255,209,102,0.4);color:var(--gold);}
+.meta-chip.cat-hw{border-color:rgba(255,107,107,0.4);color:var(--accent3);}
+.sale-bottom{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);}
+.btn-delete{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px;border-radius:6px;}
+.btn-delete:hover{color:var(--accent3);}
+.empty-state{text-align:center;padding:40px 20px;color:var(--muted);}
+.summary-table{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;}
+.table-row{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;}
+.table-row:last-child{border-bottom:none;}
+.table-row.total{background:rgba(124,255,196,0.05);font-family:'Syne',sans-serif;font-weight:700;}
+.table-key{color:var(--muted);}
+.table-val{color:var(--text);}
+.table-val.green{color:var(--accent);}
+.table-val.gold{color:var(--gold);}
+.product-grid{display:grid;gap:8px;margin-bottom:14px;}
+.product-row{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;}
+.product-name{font-size:12px;color:var(--text);flex:1;padding-right:8px;}
+.product-margin{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent);white-space:nowrap;}
+.product-margin.manual{color:var(--muted);font-size:10px;}
+.onboard-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;}
+.onboard-card{background:var(--card);border:1px solid var(--accent);border-radius:20px;padding:28px;max-width:360px;width:100%;}
+.onboard-title{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--accent);margin-bottom:8px;}
+.onboard-sub{font-size:12px;color:var(--muted);margin-bottom:20px;line-height:1.6;}
+.onboard-card .form-input{margin-bottom:12px;}
+.sale-card.paid{border-color:rgba(124,255,196,0.45);background:rgba(124,255,196,0.04);}
+.sale-card.unpaid{border-color:rgba(255,107,107,0.22);}
+.payout-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:3px 8px;border-radius:20px;cursor:pointer;border:1px solid;transition:all 0.2s;font-family:'DM Mono',monospace;user-select:none;margin-top:2px;}
+.payout-badge.paid{background:rgba(124,255,196,0.12);border-color:rgba(124,255,196,0.5);color:var(--accent);}
+.payout-badge.unpaid{background:rgba(255,107,107,0.08);border-color:rgba(255,107,107,0.35);color:var(--accent3);}
+.payout-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;flex-shrink:0;}
+.payout-filter-bar{display:flex;gap:6px;margin-bottom:12px;}
+.filter-btn{flex:1;padding:7px 4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;text-align:center;transition:all 0.2s;}
+.filter-btn.active{background:var(--card);border-color:var(--accent);color:var(--accent);}
+.payout-summary-bar{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;}
+.ps-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;}
+.ps-val{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;}
+.ps-val.green{color:var(--accent);}.ps-val.red{color:var(--accent3);}.ps-val.gold{color:var(--gold);}
+.edit-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:500;display:none;align-items:flex-end;justify-content:center;}
+.edit-modal-overlay.open{display:flex;}
+.edit-modal{background:var(--card);border:1px solid var(--border);border-radius:20px 20px 0 0;padding:20px 18px 32px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;}
+.edit-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.edit-modal-title{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--accent);}
+.edit-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 4px;}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.edit-grid .full{grid-column:1/-1;}
+.edit-section-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin:12px 0 6px;grid-column:1/-1;border-top:1px solid var(--border);padding-top:10px;}
+.btn-edit{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:6px;opacity:0.7;}
+.btn-edit:hover{color:var(--accent);opacity:1;}
+.btn-save-edit{width:100%;background:var(--accent);color:#0a0a0f;border:none;border-radius:12px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:15px;cursor:pointer;margin-top:14px;}
+.myab-edit-section{background:rgba(124,255,196,0.05);border:1px solid rgba(124,255,196,0.2);border-radius:10px;padding:12px;margin-top:8px;}
+</style>
+</head>
+<body>
+
+<!-- Onboarding overlay -->
+<div class="onboard-overlay" id="onboardOverlay" style="display:none">
+  <div class="onboard-card">
+    <div class="onboard-title">Welcome to ATG</div>
+    <div class="onboard-sub">Enter your name to get started. Your sales data will be saved locally on this device.</div>
+    <input class="form-input" id="onboardName" type="text" placeholder="Your full name">
+    <button class="btn-primary" onclick="finishOnboard()">Get Started</button>
+  </div>
+</div>
+
+<div class="header">
+  <div class="header-top">
+    <div class="logo">ATG Commission Tracker</div>
+    <div id="currentMonthBadge" class="month-badge"></div>
+  </div>
+  <div class="month-selector"><select id="monthSelect" onchange="changeMonth()"></select></div>
+  <div class="user-bar">
+    <span class="user-label">Rep:</span>
+    <span id="repNameDisplay" style="flex:1;font-family:'Syne',sans-serif;font-weight:600;font-size:13px;color:var(--accent);"></span>
+    <button onclick="resetAllData()" style="background:none;border:1px solid var(--border);color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;padding:4px 8px;border-radius:6px;cursor:pointer;">Reset</button>
+  </div>
+</div>
+<div class="legacy-banner" id="legacyBanner">📋 Legacy comp plan (4-tier) — view only</div>
+
+<div class="stats-grid">
+  <div class="stat-card green"><div class="stat-label">Total Commission</div><div class="stat-value accent" id="totalCommission">$0</div></div>
+  <div class="stat-card blue"><div class="stat-label">Total Revenue</div><div class="stat-value" id="totalRevenue">$0</div></div>
+  <div class="stat-card gold"><div class="stat-label">Margin Dollars</div><div class="stat-value gold" id="totalMargin">$0</div></div>
+  <div class="stat-card"><div class="stat-label">Sales Count</div><div class="stat-value" id="saleCount">0</div></div>
+</div>
+
+<div class="tier-section">
+  <div class="tier-card">
+    <div class="tier-header"><div class="tier-label" id="tierCardLabel">Monthly Revenue Progress</div><div class="tier-current" id="currentTierLabel">—</div></div>
+    <div class="tier-progress-bar"><div class="tier-progress-fill" id="tierProgressFill" style="width:0%"></div></div>
+    <div class="tier-info"><span id="tierProgressText"></span><span id="tierNextText"></span></div>
+    <div class="tier-tiers two-col" id="tierGrid"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('add')">+ Add</div>
+  <div class="tab" onclick="switchTab('sales')">Log</div>
+  <div class="tab" onclick="switchTab('summary')">Summary</div>
+  <div class="tab" onclick="switchTab('rates')">Rates</div>
+</div>
+
+<div class="panel active" id="panel-add">
+  <div id="legacyAddNote" style="display:none;background:rgba(255,209,102,0.08);border:1px solid rgba(255,209,102,0.3);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--gold);">📋 Legacy month — enter payout rate manually.</div>
+  <div class="form-card">
+    <div class="form-title">Log New Sale</div>
+    <div class="form-group"><label class="form-label">Account</label><input class="form-input" id="inputAccount" type="text" placeholder="Client name"></div>
+    <div class="form-group"><label class="form-label">Order # (optional)</label><input class="form-input" id="inputOrder" type="text" placeholder="Q-1234567"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Product</label>
+        <select class="form-select" id="inputProduct" onchange="updateMarginPreview()">
+          <option value="">Select...</option>
+          <option value="Autodesk - LT New">Autodesk - LT</option>
+          <option value="Autodesk AEC Products - Collections, Tokens, Vertical, Premium New">Autodesk - Collections</option>
+          <option value="Autodesk -  Construction New">Autodesk - Construction</option>
+          <option value="Autodesk - AutoCAD New">Autodesk - AutoCAD</option>
+          <option value="Autodesk Non AEC Products  New">Autodesk Non-AEC</option>
+          <option value="ATG Design and Construction Services">ATG Services</option>
+          <option value="ATG Data Solutions">ATG Data Solutions</option>
+          <option value="Global eTraining">Global eTraining</option>
+          <option value="BIMBOX - Stryker/Osprey">BIMBOX - Stryker/Osprey</option>
+          <option value="BIMBOX - Laptop">BIMBOX - Laptop</option>
+          <option value="Leica - BLK360, Software">Leica - BLK360</option>
+          <option value="Leica - RTC, BLK2GO">Leica - RTC/BLK2GO</option>
+          <option value="Bluebeam">Bluebeam</option>
+          <option value="Panzura">Panzura</option>
+          <option value="Enscape">Enscape</option>
+          <option value="DiRoots">DiRoots</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="inputCategory">
+          <option value="Software">Software</option>
+          <option value="Autodesk Construction Software">Autodesk Construction</option>
+          <option value="ATG Services">ATG Services</option>
+          <option value="Hardware">Hardware</option>
+          <option value="Global eTraining">Global eTraining</option>
+          <option value="IT Services">IT Services</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="specialGroup"><label class="form-label">Special Rule</label>
+      <select class="form-select" id="inputSpecial" onchange="onSpecialChange()">
+        <option value="">None</option>
+        <option value="first90">First 90 Days (auto Tier 2)</option>
+        <option value="myaps_multi">📅 MYABs Multi-Year (auto-schedule)</option>
+        <option value="myab_yr23">MYABs Year 2/3 (manual)</option>
+      </select>
+    </div>
+    <div class="form-group" id="halfRevGroup">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--muted);">
+        <input type="checkbox" id="inputHalfRev" onchange="updatePreview()" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer;">
+        <span>New business — 50% revenue recognition</span>
+      </label>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic;" id="halfRevNote"></div>
+    </div>
+    <!-- MYABs multi-year scheduler -->
+    <div id="myApsGroup" style="display:none;background:rgba(255,107,107,0.06);border:1px solid rgba(255,107,107,0.25);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--accent3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">📅 MYABs Multi-Year Setup</div>
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0"><label class="form-label">Term Length</label>
+          <select class="form-select" id="inputMyApsTerm" onchange="updatePreview()">
+            <option value="1">1 Year</option>
+            <option value="2">2 Years</option>
+            <option value="3" selected>3 Years</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0"><label class="form-label">Start Month</label>
+          <select class="form-select" id="inputMyApsStart" onchange="updatePreview()"></select>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6" id="myApsSchedulePreview"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Sale Amount</label><input class="form-input" id="inputAmount" type="number" placeholder="0.00" oninput="updatePreview()"></div>
+      <div class="form-group"><label class="form-label">Margin % <span id="marginLockIcon"></span></label><input class="form-input" id="inputMargin" type="number" placeholder="auto" step="0.01" oninput="updatePreview()"><div class="margin-note" id="marginNote"></div></div>
+    </div>
+    <div class="form-group" id="payoutRateGroup" style="display:none"><label class="form-label">Payout Rate (legacy)</label><input class="form-input" id="inputPayoutRate" type="number" placeholder="e.g. 0.18" step="0.01" oninput="updatePreview()"></div>
+    <div class="commission-preview" id="commissionPreview">
+      <div class="preview-row"><span>Sale Amount</span><span id="previewSale">—</span></div>
+      <div class="preview-row"><span>Margin %</span><span id="previewMarginPct">—</span></div>
+      <div class="preview-row"><span>Margin $</span><span id="previewMarginDol">—</span></div>
+      <div class="preview-row"><span>Payout Rate</span><span id="previewRate">—</span></div>
+      <div class="preview-total"><span>Commission</span><span id="previewCommission">—</span></div>
+    </div>
+    <button class="btn-primary" onclick="addSale()">Add Sale</button>
+  </div>
+</div>
+
+<div class="panel" id="panel-sales">
+  <div class="section-header"><div class="section-title">Sales Log</div><div class="count-badge" id="saleCountBadge">0 sales</div></div>
+  <div class="payout-summary-bar" id="payoutSummaryBar">
+    <div><div class="ps-label">Paid Out</div><div class="ps-val green" id="psPaid">$0</div></div>
+    <div><div class="ps-label">Pending</div><div class="ps-val red" id="psUnpaid">$0</div></div>
+    <div><div class="ps-label">Total Earned</div><div class="ps-val gold" id="psTotal">$0</div></div>
+  </div>
+  <div class="payout-filter-bar">
+    <div class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</div>
+    <div class="filter-btn" data-filter="paid" onclick="setFilter('paid')">✅ Paid</div>
+    <div class="filter-btn" data-filter="unpaid" onclick="setFilter('unpaid')">⏳ Unpaid</div>
+  </div>
+  <div id="salesList"></div>
+</div>
+
+<div class="panel" id="panel-summary">
+  <div class="section-header"><div class="section-title">Monthly Summary</div></div>
+  <div class="summary-table">
+    <div class="table-row"><span class="table-key">Revenue (attainment)</span><span class="table-val" id="sumRevenue">$0</span></div>
+    <div class="table-row"><span class="table-key">Total Margin $</span><span class="table-val gold" id="sumMargin">$0</span></div>
+    <div class="table-row"><span class="table-key">Avg Margin %</span><span class="table-val" id="sumMarginPct">0%</span></div>
+    <div class="table-row"><span class="table-key">Software Commission</span><span class="table-val" id="sumSoftware">$0</span></div>
+    <div class="table-row"><span class="table-key">Services Commission</span><span class="table-val" id="sumServices">$0</span></div>
+    <div class="table-row" id="myApsCommRow" style="display:none"><span class="table-key" style="color:var(--accent3)">MYABs Yr2/3 Commission</span><span class="table-val" style="color:var(--accent3)" id="sumMyApsComm">$0</span></div>
+    <div class="table-row total"><span class="table-key">TOTAL COMMISSION</span><span class="table-val green" id="sumTotal">$0</span></div>
+  </div>
+  <div class="section-header"><div class="section-title">By Category</div></div>
+  <div id="categorySummary" class="summary-table"></div>
+</div>
+
+<div class="panel" id="panel-rates">
+  <div id="ratesNewPlan">
+    <div class="section-header"><div class="section-title">Margins (FY27)</div></div>
+    <div class="product-grid">
+      <div class="product-row"><span class="product-name">Autodesk - LT</span><span class="product-margin">2%</span></div>
+      <div class="product-row"><span class="product-name">Autodesk - Collections</span><span class="product-margin">20%</span></div>
+      <div class="product-row"><span class="product-name">Autodesk - Construction</span><span class="product-margin">25%</span></div>
+      <div class="product-row"><span class="product-name">Autodesk - AutoCAD</span><span class="product-margin">15%</span></div>
+      <div class="product-row"><span class="product-name">ATG Services / Global eTraining</span><span class="product-margin">60%</span></div>
+      <div class="product-row"><span class="product-name">ATG Data Solutions</span><span class="product-margin manual">Manual</span></div>
+      <div class="product-row"><span class="product-name">Leica BLK360/Software</span><span class="product-margin">15%</span></div>
+      <div class="product-row"><span class="product-name">Leica RTC/BLK2GO</span><span class="product-margin">20%</span></div>
+      <div class="product-row"><span class="product-name">BIMBOX - Stryker/Osprey</span><span class="product-margin">20%</span></div>
+      <div class="product-row"><span class="product-name">BIMBOX - Laptop</span><span class="product-margin">18.5%</span></div>
+      <div class="product-row"><span class="product-name">Bluebeam / Panzura / Enscape / DiRoots</span><span class="product-margin manual">Manual</span></div>
+    </div>
+    <div class="section-header"><div class="section-title">Payout Rates (FY27)</div></div>
+    <div class="product-grid">
+      <div class="product-row"><span class="product-name">Hardware / Software</span><span class="product-margin">T1: 10%</span><span class="product-margin" style="color:var(--gold);margin-left:8px">T2: 20%</span></div>
+      <div class="product-row"><span class="product-name">Autodesk Construction</span><span class="product-margin">T1: 15%</span><span class="product-margin" style="color:var(--gold);margin-left:8px">T2: 25%</span></div>
+      <div class="product-row"><span class="product-name">Global eTraining / IT Services</span><span class="product-margin">T1: 15%</span><span class="product-margin" style="color:var(--gold);margin-left:8px">T2: 30%</span></div>
+      <div class="product-row"><span class="product-name">ATG Services</span><span class="product-margin">T1: 15%</span><span class="product-margin" style="color:var(--gold);margin-left:8px">T2: 32.5%</span></div>
+    </div>
+    <div class="tier-card" style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Key Rules</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.9">
+        📊 <b>Revenue target:</b> $125,000/month<br>
+        🏆 <b>Tier 2</b> unlocks at ≥$125k revenue<br>
+        🚀 <b>First 90 days</b> = auto Tier 2<br>
+        📅 <b>MYABs Yr2/3</b>: Commission paid at current tier rate — does <u>not</u> count toward revenue attainment<br>
+        🔒 <b>Legacy MYABs</b> (Yr1 before Feb 2026): Yr2/3 locked to same tier &amp; rate as Yr1<br>
+        ✅ Paid when ATG receives invoice & customer has paid in full
+      </div>
+    </div>
+  </div>
+  <div id="ratesLegacyPlan" style="display:none">
+    <div class="tier-card" style="border-color:rgba(255,209,102,0.3)">
+      <div style="font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Legacy 4-Tier Payout Rates</div>
+      <div class="product-grid">
+        <div class="product-row"><span class="product-name">Hardware</span><span class="product-margin" style="font-size:11px">10/15/20/<span style="color:var(--gold)">25%</span></span></div>
+        <div class="product-row"><span class="product-name">Software</span><span class="product-margin" style="font-size:11px">5/7.5/10/<span style="color:var(--gold)">17.5%</span></span></div>
+        <div class="product-row"><span class="product-name">IT / ATG Services</span><span class="product-margin" style="font-size:11px">5/15/20/<span style="color:var(--gold)">32.5%</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NEW_PLAN_START='2026-02';
+const REVENUE_TARGET=125000;
+const PRODUCT_MARGINS={
+  'Autodesk - LT New':0.02,
+  'Autodesk AEC Products - Collections, Tokens, Vertical, Premium New':0.20,
+  'Autodesk -  Construction New':0.25,'Autodesk -  Construction Renewal':0.25,'Autodesk -  Construction Transfer':0.25,
+  'Autodesk - AutoCAD New':0.15,'Autodesk Non AEC Products  New':0.02,
+  'ATG Design and Construction Services':0.60,'Global eTraining':0.60,
+  'Leica - BLK360, Software':0.15,'Leica - RTC, BLK2GO':0.20,
+  'BIMBOX - Stryker/Osprey':0.20,'BIMBOX - Laptop':0.185,
+};
+const PAYOUT_NEW={'Hardware':[0.10,0.20],'Software':[0.10,0.20],'Autodesk Construction Software':[0.15,0.25],'Global eTraining':[0.15,0.30],'IT Services':[0.15,0.30],'ATG Services':[0.15,0.325]};
+function isLegacy(k){return k<NEW_PLAN_START;}
+function getPayoutNew(cat,tier){return(PAYOUT_NEW[cat]||[0.10,0.20])[tier-1];}
+function getTierNew(rev,force){return(force||rev>=REVENUE_TARGET)?2:1;}
+function fmt(n){return'$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function fmtK(n){return n>=1000?'$'+(n/1000).toFixed(1)+'k':fmt(n);}
+function getMonthLabel(k){const[y,m]=k.split('-');return new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});}
+// Calculate revenue that counts toward attainment (respects noRevAttainment and halfRev)
+function attainAmt(s){if(s.noRevAttainment)return 0;return s.halfRev?s.amount*0.5:s.amount;}
+
+// ---- Storage ----
+function loadAll(){try{return JSON.parse(localStorage.getItem('atg_tracker_v1')||'{}');}catch{return{};}}
+function saveAll(){try{localStorage.setItem('atg_tracker_v1',JSON.stringify(db));}catch{}}
+
+let db = loadAll();
+if(!db.reps) db.reps=[];
+if(!db.sales) db.sales={};
+
+let currentRep = localStorage.getItem('atg_current_rep')||'';
+let currentMonth = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+let salesFilter = 'all';
+
+// ---- Onboarding ----
+function checkOnboard(){
+  if(!currentRep){
+    document.getElementById('onboardOverlay').style.display='flex';
+  } else {
+    document.getElementById('onboardOverlay').style.display='none';
+    document.getElementById('repNameDisplay').textContent=currentRep;
+    if(!db.reps.includes(currentRep)) db.reps.push(currentRep);
+    if(!db.sales[currentRep]) db.sales[currentRep]={};
+    saveAll();
+    refresh();
+  }
+}
+function finishOnboard(){
+  const name=document.getElementById('onboardName').value.trim();
+  if(!name){alert('Please enter your name.');return;}
+  currentRep=name;
+  localStorage.setItem('atg_current_rep',name);
+  if(!db.reps.includes(name)) db.reps.push(name);
+  if(!db.sales[name]) db.sales[name]={};
+  saveAll();
+  document.getElementById('onboardOverlay').style.display='none';
+  document.getElementById('repNameDisplay').textContent=name;
+  refresh();
+}
+
+function resetAllData(){
+  if(!confirm('This will wipe ALL your data. Any sales you\'ve logged will be LOST. Continue?')) return;
+  localStorage.removeItem('atg_tracker_v1');
+  localStorage.removeItem('atg_current_rep');
+  location.reload();
+}
+
+// ---- Month select ----
+function initMonthSelect(){
+  const sel=document.getElementById('monthSelect');
+  sel.innerHTML='';
+  const months=[];
+  for(let y=2025;y<=2027;y++) for(let m=1;m<=12;m++) months.push(`${y}-${String(m).padStart(2,'0')}`);
+  months.sort().reverse().forEach(m=>{
+    const o=document.createElement('option');
+    o.value=m;
+    o.textContent=getMonthLabel(m)+(isLegacy(m)?' ·legacy':'');
+    if(m===currentMonth) o.selected=true;
+    sel.appendChild(o);
+  });
+  document.getElementById('currentMonthBadge').textContent=getMonthLabel(currentMonth);
+}
+function changeMonth(){
+  currentMonth=document.getElementById('monthSelect').value;
+  document.getElementById('currentMonthBadge').textContent=getMonthLabel(currentMonth);
+  refresh();
+}
+
+// ---- Sales CRUD ----
+function getSales(){return(db.sales[currentRep]&&db.sales[currentRep][currentMonth])||[];}
+function setSales(s){if(!db.sales[currentRep])db.sales[currentRep]={};db.sales[currentRep][currentMonth]=s;saveAll();}
+
+// ---- Form ----
+function updateMarginPreview(){
+  const p=document.getElementById('inputProduct').value;
+  const mi=document.getElementById('inputMargin');
+  const note=document.getElementById('marginNote');
+  const lock=document.getElementById('marginLockIcon');
+  if(!p){note.textContent='';lock.textContent='';return;}
+  const am=PRODUCT_MARGINS[p];
+  if(am!==undefined){mi.value=am;mi.readOnly=true;mi.style.opacity='0.5';lock.textContent='🔒';note.textContent='Auto: '+(am*100).toFixed(1)+'%';}
+  else{mi.value='';mi.readOnly=false;mi.style.opacity='1';lock.textContent='✏️';note.textContent='Enter margin manually';}
+  // Auto-detect new Autodesk or Bluebeam for 50% revenue recognition
+  var hrCb=document.getElementById('inputHalfRev');
+  var hrNote=document.getElementById('halfRevNote');
+  var isNewBiz=p.toLowerCase().indexOf('new')!==-1||p==='Bluebeam';
+  var isAdskOrBb=p.toLowerCase().indexOf('autodesk')!==-1||p==='Bluebeam';
+  if(isNewBiz&&isAdskOrBb){hrCb.checked=true;hrNote.textContent='Auto: new Autodesk/Bluebeam — only 50% counts toward revenue attainment';}
+  else{hrCb.checked=false;hrNote.textContent='';}
+  updatePreview();
+}
+// ---- MYABs multi-year helpers ----
+function addMonths(ym,n){let[y,m]=ym.split('-').map(Number);m+=n;while(m>12){m-=12;y++;}return y+'-'+String(m).padStart(2,'0');}
+function initMyApsStartSelect(){
+  const sel=document.getElementById('inputMyApsStart');
+  if(!sel)return;
+  sel.innerHTML='';
+  const months=[];
+  for(let y=2025;y<=2028;y++) for(let mm=1;mm<=12;mm++) months.push(y+'-'+String(mm).padStart(2,'0'));
+  months.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=getMonthLabel(m);if(m===currentMonth)o.selected=true;sel.appendChild(o);});
+}
+function onSpecialChange(){
+  const v=document.getElementById('inputSpecial').value;
+  const grp=document.getElementById('myApsGroup');
+  if(v==='myaps_multi'){grp.style.display='block';initMyApsStartSelect();}
+  else{grp.style.display='none';}
+  updatePreview();
+}
+function updateMyApsSchedule(){
+  const term=parseInt(document.getElementById('inputMyApsTerm').value)||3;
+  const start=document.getElementById('inputMyApsStart').value;
+  const amt=parseFloat(document.getElementById('inputAmount').value)||0;
+  const lines=[];
+  for(let yr=1;yr<=term;yr++){
+    const mo=addMonths(start,12*(yr-1));
+    const lbl=yr===1?'Yr 1 — counts for attainment':'Yr '+yr+' — commission only, no attainment';
+    lines.push('<span style="color:'+(yr===1?'var(--accent)':'var(--accent3)')+'">'+getMonthLabel(mo)+'</span> · '+lbl+(amt?' · '+fmt(amt):''));
+  }
+  document.getElementById('myApsSchedulePreview').innerHTML=lines.join('<br>');
+}
+function updatePreview(){
+  const amt=parseFloat(document.getElementById('inputAmount').value);
+  const mar=parseFloat(document.getElementById('inputMargin').value);
+  const cat=document.getElementById('inputCategory').value;
+  const legacy=isLegacy(currentMonth);
+  const prev=document.getElementById('commissionPreview');
+  const specialVal=document.getElementById('inputSpecial').value;
+  if(!amt||!mar||!cat){prev.classList.remove('show');return;}
+  if(specialVal==='myaps_multi'&&amt){updateMyApsSchedule();}
+  const isMyApsYr23=(specialVal==='myab_yr23');
+  const halfRev=document.getElementById('inputHalfRev').checked;
+  let pRate,tier;
+  if(legacy){pRate=parseFloat(document.getElementById('inputPayoutRate').value)||0;tier='?';}
+  else{
+    const attainRev=getSales().reduce((s,x)=>s+attainAmt(x),0);
+    const newAttain=isMyApsYr23?0:(halfRev?amt*0.5:amt);
+    const revForTier=attainRev+newAttain;
+    const force=(specialVal==='first90');
+    tier=getTierNew(revForTier,force);pRate=getPayoutNew(cat,tier);
+  }
+  const md=amt*mar;const comm=md*pRate;
+  prev.classList.add('show');
+  document.getElementById('previewSale').textContent=fmt(amt)+(isMyApsYr23?' (excl. from attainment)':'')+(halfRev&&!isMyApsYr23?' (50% toward rev)':'');
+  document.getElementById('previewMarginPct').textContent=(mar*100).toFixed(1)+'%';
+  document.getElementById('previewMarginDol').textContent=fmt(md);
+  document.getElementById('previewRate').textContent=(pRate*100).toFixed(1)+'%'+(legacy?' (legacy)':' (Tier '+tier+')')+(isMyApsYr23?' · MYABs comm only':'')+(specialVal==='myaps_multi'?' · Yr 1 rate':'');
+  document.getElementById('previewCommission').textContent=fmt(comm)+(specialVal==='myaps_multi'?' (Yr 1 — future yrs auto-scheduled)':'');
+}
+function addSale(){
+  if(!currentRep){alert('Please set your name first.');return;}
+  const acct=document.getElementById('inputAccount').value.trim();
+  const order=document.getElementById('inputOrder').value.trim();
+  const prod=document.getElementById('inputProduct').value;
+  const cat=document.getElementById('inputCategory').value;
+  const amt=parseFloat(document.getElementById('inputAmount').value);
+  const mar=parseFloat(document.getElementById('inputMargin').value);
+  const special=document.getElementById('inputSpecial').value;
+  const halfRev=document.getElementById('inputHalfRev').checked;
+  const legacy=isLegacy(currentMonth);
+  if(!acct||!prod||!amt||!mar){alert('Fill in Account, Product, Amount, and Margin.');return;}
+  let pRate,tier;
+  if(legacy){pRate=parseFloat(document.getElementById('inputPayoutRate').value)||0;tier=0;}
+  else{
+    const isMyApsYr23=(special==='myab_yr23');
+    const attainRev=getSales().reduce((s,x)=>s+attainAmt(x),0);
+    const newAttain=isMyApsYr23?0:(halfRev?amt*0.5:amt);
+    const revForTier=attainRev+newAttain;
+    const force=(special==='first90');
+    tier=getTierNew(revForTier,force);pRate=getPayoutNew(cat,tier);
+  }
+  const md=amt*mar;const comm=md*pRate;
+  const noRevAttainment=(special==='myab_yr23');
+  const baseId=Date.now();
+
+  if(special==='myaps_multi'){
+    const term=parseInt(document.getElementById('inputMyApsTerm').value)||3;
+    const startMonth=document.getElementById('inputMyApsStart').value;
+    if(!db.sales[currentRep])db.sales[currentRep]={};
+    for(let yr=1;yr<=term;yr++){
+      const targetMonth=addMonths(startMonth,12*(yr-1));
+      const isYr1=(yr===1);
+      // Legacy sales (pre-Feb 2026): lock Yr2/3 to same tier & rate as Yr1
+      const legacyLock=isLegacy(startMonth);
+      const entry={
+        id:baseId+(yr*1000),
+        date:new Date().toISOString().split('T')[0],
+        account:acct,order,product:prod,category:cat,
+        amount:amt,marginPct:mar,marginDol:md,
+        payoutRate:isYr1?pRate:(legacyLock?pRate:0),
+        commission:isYr1?comm:(legacyLock?comm:0),
+        tier:isYr1?tier:(legacyLock?tier:'pending'),
+        special:isYr1?special:'myab_yr23',
+        noRevAttainment:!isYr1,
+        myApsGroupId:baseId,
+        myApsYear:yr,
+        myApsTerm:term,
+        pendingTier:isYr1?false:(legacyLock?false:true),
+        lockedRate:legacyLock&&!isYr1,
+        halfRev:halfRev,
+        rep:currentRep
+      };
+      const existing=(db.sales[currentRep][targetMonth])||[];
+      existing.unshift(entry);
+      db.sales[currentRep][targetMonth]=existing;
+    }
+    saveAll();
+    const start=document.getElementById('inputMyApsStart').value;
+    const legacyNote=legacyLock?' (locked to Yr 1 rate)':'';
+    const msg='✅ MYABs sale scheduled!\n\nYr 1: '+getMonthLabel(start)+' — attainment + commission\n'+(term>=2?'Yr 2: '+getMonthLabel(addMonths(start,12))+' — commission only'+(legacyLock?' (Yr1 rate locked)':' (tier set when due)')+'\n':'')+(term>=3?'Yr 3: '+getMonthLabel(addMonths(start,24))+' — commission only'+(legacyLock?' (Yr1 rate locked)':' (tier set when due)'):'');
+    alert(msg);
+  } else {
+    const sales=getSales();
+    sales.unshift({id:baseId,date:new Date().toISOString().split('T')[0],account:acct,order,product:prod,category:cat,amount:amt,marginPct:mar,marginDol:md,payoutRate:pRate,commission:comm,tier,special,noRevAttainment,halfRev,rep:currentRep});
+    setSales(sales);
+  }
+
+  ['inputAccount','inputOrder','inputAmount','inputPayoutRate'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('inputProduct').value='';
+  document.getElementById('inputMargin').value='';
+  document.getElementById('inputMargin').readOnly=false;
+  document.getElementById('inputMargin').style.opacity='1';
+  document.getElementById('inputSpecial').value='';
+  document.getElementById('inputHalfRev').checked=false;
+  document.getElementById('halfRevNote').textContent='';
+  document.getElementById('myApsGroup').style.display='none';
+  document.getElementById('marginNote').textContent='';
+  document.getElementById('marginLockIcon').textContent='';
+  document.getElementById('commissionPreview').classList.remove('show');
+  refresh();switchTab('sales');
+}
+
+// ---- Edit Sale Modal ----
+function openEdit(id) {
+  var sales = getSales();
+  var s = sales.find(function(x){return x.id===id;});
+  if(!s) return;
+  document.getElementById('editSaleId').value = id;
+  document.getElementById('editAccount').value = s.account||'';
+  document.getElementById('editOrder').value = s.order||'';
+  document.getElementById('editProduct').value = s.product||'';
+  document.getElementById('editCategory').value = s.category||'Software';
+  document.getElementById('editDate').value = s.date||'';
+  document.getElementById('editAmount').value = s.amount||'';
+  document.getElementById('editMargin').value = s.marginPct?(s.marginPct*100).toFixed(1):'';
+  document.getElementById('editPayoutRate').value = s.payoutRate?(s.payoutRate*100).toFixed(1):'';
+  document.getElementById('editCommOverride').value = '';
+  document.getElementById('editSpecial').value = s.special||'';
+  document.getElementById('editMyabGroupId').value = s.myApsGroupId || '';
+  document.getElementById('editMyabYear').value = s.myApsYear || '';
+  document.getElementById('editMyabTerm').value = s.myApsTerm || '';
+  document.getElementById('editNoRevAttainment').value = s.noRevAttainment?'true':'false';
+  document.getElementById('editPaid').value = s.paid?'true':'false';
+  document.getElementById('editPaidDate').value = s.paidDate||'';
+  document.getElementById('editHalfRev').checked = !!s.halfRev;
+  toggleEditMyab();
+  document.getElementById('editModalOverlay').classList.add('open');
+}
+function closeEdit() {
+  document.getElementById('editModalOverlay').classList.remove('open');
+}
+function closeEditIfBg(e) {
+  if(e.target===document.getElementById('editModalOverlay')) closeEdit();
+}
+function toggleEditMyab() {
+  var v = document.getElementById('editSpecial').value;
+  var show = v==='myab_yr23';
+  document.getElementById('editMyabSection').style.opacity = show?'1':'0.4';
+}
+function saveEdit() {
+  var id = parseInt(document.getElementById('editSaleId').value);
+  var foundMonth = null, foundIdx = -1;
+  Object.keys(db.sales[currentRep] || {}).forEach(function(mo) {
+    (db.sales[currentRep][mo] || []).forEach(function(x, i) {
+      if(x.id === id) { foundMonth = mo; foundIdx = i; }
+    });
+  });
+  if(!foundMonth) { alert('Error: sale not found'); return; }
+  var s = db.sales[currentRep][foundMonth][foundIdx];
+  var acct = document.getElementById('editAccount').value.trim();
+  if(acct) s.account = acct;
+  s.order    = document.getElementById('editOrder').value.trim();
+  var prod   = document.getElementById('editProduct').value.trim();
+  if(prod) s.product = prod;
+  s.category = document.getElementById('editCategory').value;
+  var d      = document.getElementById('editDate').value;
+  if(d) s.date = d;
+  var newAmt   = parseFloat(document.getElementById('editAmount').value);
+  var newMar   = parseFloat(document.getElementById('editMargin').value);
+  var newRate  = parseFloat(document.getElementById('editPayoutRate').value);
+  var override = parseFloat(document.getElementById('editCommOverride').value);
+  if(!isNaN(newAmt)  && newAmt  > 0) s.amount     = newAmt;
+  if(!isNaN(newMar)  && newMar  > 0) s.marginPct  = newMar / 100;
+  if(!isNaN(newRate) && newRate > 0) s.payoutRate = newRate / 100;
+  s.marginDol  = s.amount * s.marginPct;
+  s.commission = (!isNaN(override) && override !== 0) ? override : s.marginDol * s.payoutRate;
+  s.special         = document.getElementById('editSpecial').value;
+  s.noRevAttainment = document.getElementById('editNoRevAttainment').value === 'true';
+  s.paid            = document.getElementById('editPaid').value === 'true';
+  s.paidDate        = document.getElementById('editPaidDate').value || null;
+  s.halfRev         = document.getElementById('editHalfRev').checked;
+  var gid   = document.getElementById('editMyabGroupId').value.trim();
+  var yrNum = parseInt(document.getElementById('editMyabYear').value);
+  var term  = parseInt(document.getElementById('editMyabTerm').value);
+  if(isNaN(yrNum) || yrNum < 1) yrNum = 1;
+  if(isNaN(term)  || term  < 2) term  = 3;
+  var isMyabSpecial = s.special === 'myab_yr23' || s.special === 'myaps_multi';
+  if(gid && isMyabSpecial) {
+    s.myApsGroupId    = gid;
+    s.myApsYear       = yrNum;
+    s.myApsTerm       = term;
+    s.noRevAttainment = (yrNum > 1);
+    if(yrNum > 1) s.special = 'myab_yr23';
+    s.pendingTier     = (yrNum > 1);
+    saveAll();
+    var takenYears = {};
+    Object.keys(db.sales[currentRep]).forEach(function(mo) {
+      (db.sales[currentRep][mo] || []).forEach(function(x) {
+        if(String(x.myApsGroupId) === String(gid)) {
+          var y = parseInt(x.myApsYear);
+          if(!isNaN(y)) takenYears[y] = mo;
+        }
+      });
+    });
+    var baseMonth = addMonths(foundMonth, -12 * (yrNum - 1));
+    var created = [];
+    // Check if Yr1 base month is legacy — if so, lock all years to Yr1 rate
+    var legacyLock = isLegacy(baseMonth);
+    for(var yr = 1; yr <= term; yr++) {
+      if(takenYears[yr] !== undefined) continue;
+      var tgtMo = addMonths(baseMonth, 12 * (yr - 1));
+      if(!db.sales[currentRep][tgtMo]) db.sales[currentRep][tgtMo] = [];
+      var entry = {
+        id:              Date.now() + yr * 1009 + Math.floor(Math.random() * 499),
+        date:            tgtMo + '-15',
+        account:         s.account,
+        order:           s.order,
+        product:         s.product,
+        category:        s.category,
+        amount:          s.amount,
+        marginPct:       s.marginPct,
+        marginDol:       s.marginDol,
+        payoutRate:      yr === 1 ? s.payoutRate : (legacyLock ? s.payoutRate : 0),
+        commission:      yr === 1 ? s.commission : (legacyLock ? s.commission : 0),
+        tier:            yr === 1 ? (s.tier || 0) : (legacyLock ? (s.tier || 0) : 'pending'),
+        special:         yr === 1 ? '' : 'myab_yr23',
+        noRevAttainment: yr !== 1,
+        myApsGroupId:    gid,
+        myApsYear:       yr,
+        myApsTerm:       term,
+        pendingTier:     yr === 1 ? false : (legacyLock ? false : true),
+        lockedRate:      legacyLock && yr !== 1,
+        halfRev:         s.halfRev||false,
+        rep:             currentRep
+      };
+      db.sales[currentRep][tgtMo].unshift(entry);
+      created.push('Yr ' + yr + ' -> ' + getMonthLabel(tgtMo));
+    }
+    saveAll();
+    var sel = document.getElementById('monthSelect');
+    for(var y2 = 1; y2 <= term; y2++) {
+      var pmo = addMonths(baseMonth, 12 * (y2 - 1));
+      var alreadyIn = false;
+      for(var oi = 0; oi < sel.options.length; oi++) {
+        if(sel.options[oi].value === pmo) { alreadyIn = true; break; }
+      }
+      if(!alreadyIn) {
+        var opt = document.createElement('option');
+        opt.value = pmo; opt.textContent = getMonthLabel(pmo);
+        var inserted = false;
+        for(var oj = 0; oj < sel.options.length; oj++) {
+          if(sel.options[oj].value > pmo) { sel.insertBefore(opt, sel.options[oj]); inserted = true; break; }
+        }
+        if(!inserted) sel.appendChild(opt);
+      }
+    }
+    closeEdit();
+    if(created.length) {
+      var jumpTo = addMonths(baseMonth, 12);
+      currentMonth = jumpTo;
+      sel.value = jumpTo;
+      document.getElementById('currentMonthBadge').textContent = getMonthLabel(jumpTo);
+      refresh();
+      alert('MYABs entries created:\n\n' + created.join('\n') + '\n\nNow showing ' + getMonthLabel(jumpTo) + '.');
+    } else {
+      refresh();
+      alert('MYAB group saved. All ' + term + ' years already exist.');
+    }
+  } else {
+    if(!isMyabSpecial) {
+      delete s.myApsGroupId; delete s.myApsYear; delete s.myApsTerm; delete s.pendingTier;
+    }
+    saveAll();
+    closeEdit();
+    refresh();
+  }
+}
+
+function togglePaid(id){
+  var sales=getSales();
+  var s=sales.find(function(x){return x.id===id;});
+  if(!s) return;
+  s.paid=!s.paid;
+  s.paidDate=s.paid?new Date().toISOString().split('T')[0]:null;
+  setSales(sales); renderSalesList();
+}
+function setFilter(f){
+  salesFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.toggle('active',b.dataset.filter===f);});
+  renderSalesList();
+}
+function deleteSale(id){
+  if(!confirm('Delete this sale?'))return;
+  setSales(getSales().filter(s=>s.id!==id));refresh();
+}
+
+// ---- Render ----
+function getCatClass(c){
+  if(c==='Software'||c==='Autodesk Construction Software')return'cat-s';
+  if(c==='ATG Services')return'cat-svc';
+  if(c==='Hardware')return'cat-hw';
+  return'';
+}
+function refresh(){
+  if(!currentRep)return;
+  const legacy=isLegacy(currentMonth);
+  const sales=getSales();
+  let needsSave=false;
+  if(!legacy){
+    const attainRevBase=sales.filter(s=>!s.noRevAttainment&&!s.pendingTier).reduce((a,x)=>a+attainAmt(x),0);
+    sales.forEach(s=>{
+      if(s.pendingTier && !s.lockedRate){
+        const t=getTierNew(attainRevBase,false);
+        const r=getPayoutNew(s.category,t);
+        const c=s.marginDol*r;
+        if(s.tier!==t||Math.abs(s.commission-c)>0.001){s.tier=t;s.payoutRate=r;s.commission=c;needsSave=true;}
+      }
+    });
+    if(needsSave)setSales(sales);
+  }
+  const totalRev=sales.reduce((s,x)=>s+attainAmt(x),0);
+  const totalMar=sales.reduce((s,x)=>s+(x.noRevAttainment?0:(x.halfRev?x.marginDol*0.5:x.marginDol)),0);
+  const totalComm=sales.reduce((s,x)=>s+x.commission,0);
+  const myApsComm=sales.filter(x=>x.noRevAttainment).reduce((s,x)=>s+x.commission,0);
+
+  document.getElementById('legacyBanner').classList.toggle('show',legacy);
+  document.getElementById('legacyAddNote').style.display=legacy?'block':'none';
+  document.getElementById('payoutRateGroup').style.display=legacy?'block':'none';
+  document.getElementById('specialGroup').style.display=legacy?'none':'block';
+  document.getElementById('ratesNewPlan').style.display=legacy?'none':'block';
+  document.getElementById('ratesLegacyPlan').style.display=legacy?'block':'none';
+
+  document.getElementById('totalCommission').textContent=fmt(totalComm);
+  document.getElementById('totalRevenue').textContent=fmtK(totalRev);
+  document.getElementById('totalMargin').textContent=fmtK(totalMar);
+  document.getElementById('saleCount').textContent=sales.length;
+  document.getElementById('saleCountBadge').textContent=sales.length+' sales';
+
+  const tg=document.getElementById('tierGrid');
+  if(legacy){
+    const t=sales.length&&sales[0].tier?sales[0].tier:4;
+    document.getElementById('currentTierLabel').textContent='Tier '+t;
+    document.getElementById('tierCardLabel').textContent='Legacy Month';
+    document.getElementById('tierProgressFill').style.width='100%';
+    document.getElementById('tierProgressText').textContent=fmt(totalRev)+' revenue';
+    document.getElementById('tierNextText').textContent='View only';
+    tg.className='tier-tiers four-col';
+    tg.innerHTML=['Tier 1','Tier 2','Tier 3','Tier 4'].map((n,i)=>`<div class="tier-item ${i+1===t?'active':''}"><div class="tier-item-name">${n}</div><div class="tier-item-rate">${i+1===t?'✓':'—'}</div></div>`).join('');
+  } else {
+    const tier=getTierNew(totalRev,false);
+    const pct=Math.min(100,(totalRev/REVENUE_TARGET)*100);
+    document.getElementById('currentTierLabel').textContent='Tier '+tier;
+    document.getElementById('tierCardLabel').textContent='Monthly Revenue Progress';
+    document.getElementById('tierProgressFill').style.width=pct+'%';
+    document.getElementById('tierProgressText').textContent=fmt(totalRev)+' revenue';
+    document.getElementById('tierNextText').textContent=tier===2?'🏆 Tier 2 Unlocked!':fmt(REVENUE_TARGET-totalRev)+' to Tier 2';
+    tg.className='tier-tiers two-col';
+    tg.innerHTML=`<div class="tier-item ${tier===1?'active':''}"><div class="tier-item-name">Tier 1</div><div class="tier-item-rate">Base</div><div class="tier-item-range">&lt;$125k</div></div><div class="tier-item ${tier===2?'active':''}"><div class="tier-item-name">Tier 2</div><div class="tier-item-rate">Bonus</div><div class="tier-item-range">≥$125k</div></div>`;
+  }
+
+  renderSalesList();
+  const myApsAmt=sales.filter(x=>x.noRevAttainment).reduce((s,x)=>s+x.amount,0);
+  const halfRevAmt=sales.filter(x=>x.halfRev&&!x.noRevAttainment).reduce((s,x)=>s+x.amount*0.5,0);
+  document.getElementById('sumRevenue').textContent=fmt(totalRev)+(myApsAmt?' (+'+fmt(myApsAmt)+' MYABs excl.)':'')+(halfRevAmt?' (incl. '+fmt(halfRevAmt)+' at 50%)':'');
+  document.getElementById('sumMargin').textContent=fmt(totalMar);
+  document.getElementById('sumMarginPct').textContent=totalRev?((totalMar/totalRev)*100).toFixed(1)+'%':'0%';
+  const sc=sales.filter(s=>['Software','Autodesk Construction Software','Global eTraining'].includes(s.category)).reduce((a,b)=>a+b.commission,0);
+  const sv=sales.filter(s=>s.category==='ATG Services').reduce((a,b)=>a+b.commission,0);
+  document.getElementById('sumSoftware').textContent=fmt(sc);
+  document.getElementById('sumServices').textContent=fmt(sv);
+  document.getElementById('sumTotal').textContent=fmt(totalComm);
+  const myApsCommRow=document.getElementById('myApsCommRow');
+  if(myApsComm>0){myApsCommRow.style.display='flex';document.getElementById('sumMyApsComm').textContent=fmt(myApsComm);}else{myApsCommRow.style.display='none';}
+  const catMap={};
+  sales.forEach(s=>{if(!catMap[s.category])catMap[s.category]=0;catMap[s.category]+=s.commission;});
+  document.getElementById('categorySummary').innerHTML=Object.entries(catMap).length
+    ?Object.entries(catMap).map(([c,v])=>`<div class="table-row"><span class="table-key">${c}</span><span class="table-val">${fmt(v)}</span></div>`).join('')
+    :'<div class="table-row"><span class="table-key" style="width:100%;text-align:center">No data</span></div>';
+}
+
+function renderSalesList(){
+  var sales=getSales();
+  var pc=sales.reduce(function(a,s){return a+(s.paid?s.commission:0);},0);
+  var uc=sales.reduce(function(a,s){return a+(s.paid?0:s.commission);},0);
+  var tc=sales.reduce(function(a,s){return a+s.commission;},0);
+  var el=document.getElementById("psPaid");
+  if(el){el.textContent=fmt(pc);document.getElementById("psUnpaid").textContent=fmt(uc);document.getElementById("psTotal").textContent=fmt(tc);}
+  var list=document.getElementById("salesList");
+  if(!list)return;
+  var fl=salesFilter==="paid"?sales.filter(function(s){return s.paid;}):salesFilter==="unpaid"?sales.filter(function(s){return !s.paid;}):sales;
+  if(!sales.length){list.innerHTML='<div class="empty-state"><div style="font-size:40px;margin-bottom:12px">📋</div><div>No sales logged yet.</div></div>';return;}
+  if(!fl.length){list.innerHTML='<div class="empty-state"><div style="font-size:32px;margin-bottom:10px">'+(salesFilter==="paid"?"✅":"⏳")+'</div><div>No '+(salesFilter==="paid"?"paid":"unpaid")+' commissions this month.</div></div>';return;}
+  list.innerHTML=fl.map(function(s){
+    var cls=s.paid?"paid":"unpaid";
+    var bdr=s.myApsGroupId?"border-left:3px solid rgba(255,107,107,0.6)":"";
+    var yr=s.myApsYear?" &mdash; <span style='font-size:10px;color:var(--accent3)'>Yr "+s.myApsYear+" of "+s.myApsTerm+"</span>":"";
+    var paid_lbl=s.paid?"✓ Paid"+(s.paidDate?" "+s.paidDate:""):"⏳ Unpaid";
+    var prod=s.product.length>38?s.product.substring(0,38)+"…":s.product;
+    return "<div class='sale-card "+cls+"' style='"+bdr+"'>"+"<div class='sale-top'><div class='sale-account'>"+s.account+yr+"</div>"+"<div class='sale-commission'>"+fmt(s.commission)+" <button class='btn-edit' onclick='openEdit("+s.id+")'>&#9998;</button> <button class='btn-delete' onclick='deleteSale("+s.id+")'>×</button></div></div>"+"<div class='sale-meta'>"+"<span class='meta-chip "+getCatClass(s.category)+"'>"+s.category+"</span>"+"<span class='meta-chip'>"+( s.marginPct*100).toFixed(1)+"% margin</span>"+"<span class='meta-chip'>"+( s.payoutRate*100).toFixed(1)+"% · Tier "+(s.tier||"?")+"</span>"+(s.special==="myab_yr23"?"<span class='meta-chip' style='color:var(--accent3);border-color:rgba(255,107,107,0.4)'>MYABs comm only</span>":"")+((s.myApsGroupId&&s.myApsYear===1)?"<span class='meta-chip' style='color:var(--accent);border-color:rgba(124,255,196,0.4)'>📅 MYABs Yr 1</span>":"")+(s.special==="first90"?"<span class='meta-chip' style='color:var(--gold)'>90-day</span>":"")+(s.halfRev?"<span class='meta-chip' style='color:var(--accent2);border-color:rgba(91,142,255,0.4)'>50% rev</span>":"")+(s.lockedRate?"<span class='meta-chip' style='color:var(--gold);border-color:rgba(255,209,102,0.4)'>🔒 Yr1 rate</span>":"")+"<span class='payout-badge "+cls+"' onclick='togglePaid("+s.id+")'>"+'<span class="payout-dot"></span>'+paid_lbl+"</span>"+"</div>"+"<div class='sale-bottom'><span>"+prod+"</span><span>"+fmt(s.amount)+"</span></div>"+(s.order?"<div style='font-size:10px;color:var(--muted);margin-top:4px'>"+s.order+"</div>":"")+"</div>";
+  }).join("");
+}
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['add','sales','summary','rates'][i]===tab));
+  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+}
+
+// Boot
+checkOnboard();
+initMonthSelect();
+</script>
+
+<!-- Edit Sale Modal -->
+<div class="edit-modal-overlay" id="editModalOverlay" onclick="closeEditIfBg(event)">
+  <div class="edit-modal">
+    <div class="edit-modal-header">
+      <div class="edit-modal-title">✏️ Edit Sale</div>
+      <button class="edit-close" onclick="closeEdit()">✕</button>
+    </div>
+    <input type="hidden" id="editSaleId">
+    <div class="edit-grid">
+      <div class="full form-group"><label class="form-label">Account</label><input class="form-input" id="editAccount" type="text" placeholder="Client name"></div>
+      <div class="full form-group"><label class="form-label">Order #</label><input class="form-input" id="editOrder" type="text" placeholder="Q-1234567"></div>
+      <div class="full form-group"><label class="form-label">Product</label><input class="form-input" id="editProduct" type="text" placeholder="Product name"></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="editCategory">
+          <option value="Software">Software</option>
+          <option value="Autodesk Construction Software">Autodesk Construction</option>
+          <option value="ATG Services">ATG Services</option>
+          <option value="Global eTraining">Global eTraining</option>
+          <option value="Hardware">Hardware</option>
+          <option value="IT Services">IT Services</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="editDate" type="date"></div>
+      <div class="form-group"><label class="form-label">Sale Amount ($)</label><input class="form-input" id="editAmount" type="number" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Margin %</label><input class="form-input" id="editMargin" type="number" step="0.1" placeholder="20"></div>
+      <div class="form-group"><label class="form-label">Payout Rate %</label><input class="form-input" id="editPayoutRate" type="number" step="0.1" placeholder="10"></div>
+      <div class="form-group"><label class="form-label">Commission Override ($)</label><input class="form-input" id="editCommOverride" type="number" step="0.01" placeholder="leave blank = auto"></div>
+      <div class="form-group"><label class="form-label">Special Rule</label>
+        <select class="form-select" id="editSpecial" onchange="toggleEditMyab()">
+          <option value="">None</option>
+          <option value="first90">90-Day Rule</option>
+          <option value="myab_yr23">MYABs Yr2/3 (comm only)</option>
+        </select>
+      </div>
+      <div class="edit-section-label full">MYABs / Multi-Year Settings</div>
+      <div class="myab-edit-section full" id="editMyabSection">
+        <div class="edit-grid">
+          <div class="form-group"><label class="form-label">MYAB Group ID</label><input class="form-input" id="editMyabGroupId" type="text" placeholder="e.g. 1234567890"></div>
+          <div class="form-group"><label class="form-label">Year # (1/2/3)</label><input class="form-input" id="editMyabYear" type="number" min="1" max="3" placeholder="1"></div>
+          <div class="form-group"><label class="form-label">Term Length (yrs)</label><input class="form-input" id="editMyabTerm" type="number" min="1" max="5" placeholder="3"></div>
+          <div class="form-group"><label class="form-label">Exclude from Rev</label>
+            <select class="form-select" id="editNoRevAttainment">
+              <option value="false">No (counts toward attainment)</option>
+              <option value="true">Yes (exclude from attainment)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="edit-section-label full">Payout Status</div>
+      <div class="full form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--muted);">
+          <input type="checkbox" id="editHalfRev" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer;">
+          <span>New business — 50% revenue recognition</span>
+        </label>
+      </div>
+      <div class="form-group"><label class="form-label">Paid by ATG?</label>
+        <select class="form-select" id="editPaid">
+          <option value="false">⏳ Unpaid</option>
+          <option value="true">✓ Paid</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Paid Date</label><input class="form-input" id="editPaidDate" type="date"></div>
+    </div>
+    <button class="btn-save-edit" onclick="saveEdit()">Save Changes</button>
+  </div>
+</div>
+
+</body>
+</html>
