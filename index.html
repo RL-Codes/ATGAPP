@@ -1261,22 +1261,35 @@ function hideProcessing() {
 
 // Field mapping - map various column names to our standard fields
 function mapField(header) {
-  var h = header.toLowerCase().replace(/[^a-z0-9]/g,'');
-  if(h.match(/^(account|company|enduser|customer|tradename|companyname|endusertrade)$/)) return 'account';
-  if(h.match(/^(city|endusertradecity|tradecity)$/)) return 'city';
-  if(h.match(/^(product|description|productname|item)$/)) return 'product';
-  if(h.match(/^(amount|acv|acvbilling|billing|targetcurrency|pretaxtotal|pretax|total|saleamount|revenue)$/)) return 'amount';
-  if(h.match(/^(margin|marginpct|marginpercent|gp)$/)) return 'margin';
-  if(h.match(/^(commission|repcommission|commissionamt|commissionamount)$/)) return 'commission';
-  if(h.match(/^(atgcommission|atgcomm)$/)) return 'atgCommission';
-  if(h.match(/^(rate|payoutrate|repcommissionpercent|commissionpct|tierrate)$/)) return 'payoutRate';
-  if(h.match(/^(tier|tierlevel)$/)) return 'tier';
-  if(h.match(/^(date|attainmentdate|saledate|invoicedate|orderdate)$/)) return 'date';
-  if(h.match(/^(order|ordernumber|ordernum|orderno)$/)) return 'order';
-  if(h.match(/^(invoice|invoicenumber|invoicenum)$/)) return 'invoice';
-  if(h.match(/^(rep|agent|agentcontactname|repname|salesperson)$/)) return 'rep';
-  if(h.match(/^(category|type|saletype)$/)) return 'category';
-  if(h.match(/^(paid|paidstatus|status)$/)) return 'paid';
+  var h = (header || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+  // Account / company
+  if(h.match(/(account|company|enduser|customer|tradename|companyname|endusertrade)/)) return 'account';
+  if(h.match(/(city|endusertradecity|tradecity)/)) return 'city';
+  // Product
+  if(h.match(/(productname|product|description|item)/)) return 'product';
+  // Amount / revenue
+  if(h.match(/(salesamount|saleamount|pretax|amount|acv|acvbilling|billing|targetcurrency|pretaxtotal|total|revenue(?!tier))/)) return 'amount';
+  // Margin
+  if(h.match(/(manualmargin|marginpct|marginpercent|margindollar|margindol)/)) return 'marginDol';
+  if(h.match(/(margin)/)) return 'margin';
+  // Commission
+  if(h.match(/(commissionearned|repcommission|commissionamt|commissionamount|commission(?!pct))/)) return 'commission';
+  if(h.match(/(atgcommission|atgcomm)/)) return 'atgCommission';
+  // Payout rate
+  if(h.match(/(payoutrate|repcommissionpercent|commissionpct|tierrate)/)) return 'payoutRate';
+  // Tier
+  if(h.match(/(revenuetier|tierlevel|^tier$)/)) return 'tier';
+  // Date / month
+  if(h.match(/(attainmentdate|saledate|invoicedate|orderdate|^date$|^month$)/)) return 'date';
+  // Order
+  if(h.match(/(ordernumber|ordernum|orderno|^order$)/)) return 'order';
+  if(h.match(/(invoicenumber|invoicenum|^invoice$)/)) return 'invoice';
+  // Rep
+  if(h.match(/(agentcontactname|repname|salesperson|^rep$|^agent$)/)) return 'rep';
+  // Category
+  if(h.match(/(category|type|saletype)/)) return 'category';
+  // Paid
+  if(h.match(/(paidstatus|^paid$|^status$)/)) return 'paid';
   return header;
 }
 
@@ -1290,20 +1303,24 @@ function mapAndPreview(rows, headers) {
   rows = rows.filter(function(row) {
     var vals = Object.values(row);
     // Skip if all values are empty
-    var hasAnyValue = vals.some(function(v) { return v !== '' && v !== null && v !== undefined; });
+    var hasAnyValue = vals.some(function(v) { return v !== '' && v !== null && v !== undefined && v !== 0; });
     if(!hasAnyValue) return false;
 
-    // Check for a meaningful account/company name
+    // Map all fields to check
     var mapped = {};
     headers.forEach(function(h){ mapped[mapField(h)] = row[h]; });
+
+    // Check for a meaningful account/company name
     var account = String(mapped.account || mapped.customer || '').trim();
+    // Check all dollar fields
     var amount = parseFloat(String(mapped.amount || mapped.total || '0').replace(/[$,]/g,'')) || 0;
     var commission = parseFloat(String(mapped.commission || '0').replace(/[$,]/g,'')) || 0;
+    var marginDol = parseFloat(String(mapped.marginDol || '0').replace(/[$,]/g,'')) || 0;
 
-    // Must have a real account name (not empty, not "unknown")
-    var hasAccount = account.length > 1 && account.toLowerCase() !== 'unknown' && account.toLowerCase() !== 'total' && account.toLowerCase() !== 'grand total';
+    // Must have a real account name (not empty, not summary rows)
+    var hasAccount = account.length > 0 && account.toLowerCase() !== 'unknown' && account.toLowerCase() !== 'total' && account.toLowerCase() !== 'grand total';
     // Must have some dollar amount > 0
-    var hasMoney = amount > 0 || commission > 0;
+    var hasMoney = amount > 0 || commission > 0 || marginDol > 0;
 
     return hasAccount && hasMoney;
   });
@@ -1378,14 +1395,16 @@ async function confirmImport() {
     var amount = parseFloat(String(mapped.amount || mapped.total || '0').replace(/[$,]/g,'')) || 0;
     var marginVal = parseFloat(String(mapped.margin || '0').replace(/[%$,]/g,''));
     var marginPct = marginVal > 1 ? marginVal / 100 : marginVal;
+    var marginDolDirect = parseFloat(String(mapped.marginDol || '0').replace(/[$,]/g,'')) || 0;
     var commission = parseFloat(String(mapped.commission || '0').replace(/[$,]/g,'')) || 0;
     var payoutRate = parseFloat(String(mapped.payoutRate || '0').replace(/[%$,]/g,''));
     if(payoutRate > 1) payoutRate = payoutRate / 100;
-    var tier = parseInt(mapped.tier) || 0;
-    var account = mapped.account || mapped.customer || 'Unknown';
-    var product = mapped.product || mapped.description || '';
-    var category = mapped.category || guessCategory(product);
-    var marginDol = marginPct > 0 ? amount * marginPct : (commission && payoutRate > 0 ? commission / payoutRate : 0);
+    var tierRaw = String(mapped.tier || '0').replace(/[^0-9]/g,'');
+    var tier = parseInt(tierRaw) || 0;
+    var account = String(mapped.account || mapped.customer || '').trim();
+    var product = String(mapped.product || mapped.description || '').trim();
+    var category = String(mapped.category || '').trim() || guessCategory(product);
+    var marginDol = marginDolDirect > 0 ? marginDolDirect : (marginPct > 0 ? amount * marginPct : (commission && payoutRate > 0 ? commission / payoutRate : 0));
     if(!marginPct && amount > 0 && marginDol > 0) marginPct = marginDol / amount;
     if(!payoutRate && marginDol > 0 && commission > 0) payoutRate = commission / marginDol;
     if(!commission && marginDol > 0 && payoutRate > 0) commission = marginDol * payoutRate;
@@ -1398,10 +1417,21 @@ async function confirmImport() {
     if(monthSetting !== 'auto') {
       targetMonth = monthSetting;
     } else if(rowDate) {
-      var dm = parseImportDate(String(rowDate));
-      if(dm) {
-        targetMonth = dm.month;
-        parsedDate = dm.date;
+      // Handle Excel Date objects (SheetJS may return as string like "2026-02-02T00:00:00.000Z")
+      var dateStr = String(rowDate);
+      if(rowDate instanceof Date || dateStr.match(/^\d{4}-\d{2}-\d{2}T/)) {
+        var dateObj = rowDate instanceof Date ? rowDate : new Date(dateStr);
+        if(!isNaN(dateObj.getTime())) {
+          var yy = dateObj.getFullYear();
+          var mm = String(dateObj.getMonth()+1).padStart(2,'0');
+          var dd = String(dateObj.getDate()).padStart(2,'0');
+          parsedDate = yy+'-'+mm+'-'+dd;
+          targetMonth = yy+'-'+mm;
+        }
+      }
+      if(!parsedDate) {
+        var dm = parseImportDate(dateStr);
+        if(dm) { targetMonth = dm.month; parsedDate = dm.date; }
       }
     }
 
