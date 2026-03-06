@@ -1439,7 +1439,41 @@ function parseImportDate(str){
 async function confirmImport(){
   if(!currentUser){alert('Please log in first.');return;}
   var monthSetting=document.getElementById('importMonth').value,importType=document.getElementById('importType').value;
-  var count=0,errors=0,monthCounts={};
+  var count=0,errors=0,skipped=0,monthCounts={};
+  showProcessing('Checking for duplicates…');
+  // Pre-load existing sales for all months we might import into, for dedup
+  var existingByMonth={};
+  async function getExistingForMonth(mo){
+    if(existingByMonth[mo])return existingByMonth[mo];
+    var all=[],offset=0,pageSize=1000;
+    while(true){
+      var r=await _supabase.from('sales').select('account,product,amount,order_number,date').eq('user_id',currentUser.id).eq('month',mo).range(offset,offset+pageSize-1);
+      if(r.error||!r.data||!r.data.length)break;
+      all=all.concat(r.data);
+      if(r.data.length<pageSize)break;
+      offset+=pageSize;
+    }
+    existingByMonth[mo]=all;
+    return all;
+  }
+  function isDuplicate(existing,account,product,amount,order){
+    var acctLower=account.toLowerCase().trim();
+    var prodLower=product.toLowerCase().trim();
+    var orderClean=(order||'').replace(/[\s\u2009]/g,'').toLowerCase();
+    for(var j=0;j<existing.length;j++){
+      var ex=existing[j];
+      var exAcct=(ex.account||'').toLowerCase().trim();
+      var exProd=(ex.product||'').toLowerCase().trim();
+      var exAmt=parseFloat(ex.amount)||0;
+      var exOrder=(ex.order_number||'').replace(/[\s\u2009]/g,'').toLowerCase();
+      // Match: same account + same amount + (same product OR same order number)
+      if(exAcct===acctLower&&Math.abs(exAmt-amount)<0.01){
+        if(exProd===prodLower)return true;
+        if(orderClean&&exOrder&&orderClean===exOrder)return true;
+      }
+    }
+    return false;
+  }
   showProcessing('Importing…');
   for(var i=0;i<importedRows.length;i++){
     if(importExcluded.has(i))continue;
@@ -1455,6 +1489,7 @@ async function confirmImport(){
     var tier=parseInt(String(mapped.tier||'0').replace(/[^0-9]/g,''))||0;
     var account=String(mapped.account||'').trim();
     var product=String(mapped.product||'').trim();
+    var order=String(mapped.order||mapped.invoice||'').trim();
     var category=String(mapped.category||'').trim()||guessCategory(product);
     var marginDol=marginDolDirect>0?marginDolDirect:(marginPct>0?amount*marginPct:(commission&&payoutRate>0?commission/payoutRate:0));
     if(!marginPct&&amount>0&&marginDol>0)marginPct=marginDol/amount;
@@ -1475,6 +1510,11 @@ async function confirmImport(){
       // Try all date formats via parseImportDate
       if(!parsedDate){var dm=parseImportDate(dateStr);if(dm){targetMonth=dm.month;parsedDate=dm.date;}}
     }
+    // Check for duplicate before inserting
+    var existing=await getExistingForMonth(targetMonth);
+    if(isDuplicate(existing,account,product,amount,order)){
+      skipped++;continue;
+    }
     if(!monthCounts[targetMonth])monthCounts[targetMonth]=0;monthCounts[targetMonth]++;
     var isPayout=importType==='payout'||(importType==='auto'&&mapped.atgCommission);
     if(isPayout&&account!=='Unknown'){
@@ -1485,14 +1525,18 @@ async function confirmImport(){
     var special='';
     if(isMyab)special='myaps_multi';
     var halfRev=false;
-    var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:mapped.order||mapped.invoice||'',product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:special,noRevAttainment:false,halfRev:halfRev,paid:isPayout,paidDate:isPayout?(parsedDate||new Date().toISOString().split('T')[0]):null};
+    var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:order,product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:special,noRevAttainment:false,halfRev:halfRev,paid:isPayout,paidDate:isPayout?(parsedDate||new Date().toISOString().split('T')[0]):null};
     var result=await insertSaleToDb(entry,targetMonth);
-    if(result)count++;else errors++;
+    if(result){
+      count++;
+      // Add to existing cache so subsequent rows in the same import don't double up
+      existing.push({account:account,product:product,amount:amount,order_number:order,date:parsedDate||''});
+    }else errors++;
   }
   hideProcessing();await loadSalesFromDb();refresh();
   var breakdown=Object.keys(monthCounts).sort().map(mo=>getMonthLabel(mo)+': '+monthCounts[mo]+' sales').join('<br>');
   var re=document.getElementById('importResult');re.style.display='block';
-  re.innerHTML='<div style="background:var(--atg-sky);border:1px solid var(--atg-sky-deep);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:22px;margin-bottom:6px;">✅</div><div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;letter-spacing:.3px;">'+count+' ROWS IMPORTED</div>'+(errors?'<div style="font-size:12px;color:var(--red);margin-top:4px;">'+errors+' errors</div>':'')+'<div style="font-size:12px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div></div>';
+  re.innerHTML='<div style="background:var(--atg-sky);border:1px solid var(--atg-sky-deep);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:22px;margin-bottom:6px;">✅</div><div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;letter-spacing:.3px;">'+count+' NEW ROWS IMPORTED</div>'+(skipped?'<div style="font-size:12px;color:var(--text-3);margin-top:4px;">'+skipped+' duplicates skipped</div>':'')+(errors?'<div style="font-size:12px;color:var(--red);margin-top:4px;">'+errors+' errors</div>':'')+'<div style="font-size:12px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div></div>';
   document.getElementById('importPreview').style.display='none';importedRows=[];
 }
 function cancelImport(){importedRows=[];importExcluded=new Set();document.getElementById('importPreview').style.display='none';document.getElementById('importResult').style.display='none';document.getElementById('importTypeSection').style.display='none';}
