@@ -740,8 +740,17 @@ _supabase.auth.onAuthStateChange((event,session)=>{
 
 // ── DB ──
 async function loadSalesFromDb(){
-  var r=await _supabase.from('sales').select('*').eq('user_id',currentUser.id).eq('month',currentMonth).order('created_at',{ascending:false});
-  salesCache=(r.data||[]).map(mapRow);
+  // Supabase defaults to 1000 rows max — use pagination to get all
+  var all=[], offset=0, pageSize=1000;
+  while(true){
+    var r=await _supabase.from('sales').select('*').eq('user_id',currentUser.id).eq('month',currentMonth).order('created_at',{ascending:false}).range(offset, offset+pageSize-1);
+    if(r.error){console.error('Load error:',r.error);break;}
+    if(!r.data||!r.data.length)break;
+    all=all.concat(r.data);
+    if(r.data.length<pageSize)break;
+    offset+=pageSize;
+  }
+  salesCache=all.map(mapRow);
 }
 async function loadDeletedFromDb(){
   var key='atg_deleted_'+currentUser.id;
@@ -831,13 +840,17 @@ async function clearAllSales(){
   var now=Date.now();
   for(var s of sales){
     deletedCache.push(Object.assign({},s,{deletedAt:now,deletedMonth:currentMonth}));
-    await deleteSaleFromDb(s.id);
   }
   saveDeletedToStorage();
+  // Batch delete: delete all sales for this user+month in one query
+  var r=await _supabase.from('sales').delete().eq('user_id',currentUser.id).eq('month',currentMonth);
+  if(r.error){console.error('Batch delete error:',r.error);alert('Error clearing sales: '+r.error.message);return;}
   await loadSalesFromDb();
+  // Check if any remain (shouldn't, but just in case)
+  var remaining=getSales().length;
   renderDeletedList();
   refresh();
-  alert('Moved '+sales.length+' sales to Recently Deleted.');
+  alert('Moved '+sales.length+' sales to Recently Deleted.'+(remaining?' ('+remaining+' could not be removed — check console)':''));
 }
 
 // ── DELETE SINGLE (soft) ──
