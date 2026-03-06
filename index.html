@@ -740,7 +740,6 @@ _supabase.auth.onAuthStateChange((event,session)=>{
 
 // ── DB ──
 async function loadSalesFromDb(){
-  // Supabase defaults to 1000 rows max — use pagination to get all
   var all=[], offset=0, pageSize=1000;
   while(true){
     var r=await _supabase.from('sales').select('*').eq('user_id',currentUser.id).eq('month',currentMonth).order('created_at',{ascending:false}).range(offset, offset+pageSize-1);
@@ -842,11 +841,9 @@ async function clearAllSales(){
     deletedCache.push(Object.assign({},s,{deletedAt:now,deletedMonth:currentMonth}));
   }
   saveDeletedToStorage();
-  // Batch delete: delete all sales for this user+month in one query
   var r=await _supabase.from('sales').delete().eq('user_id',currentUser.id).eq('month',currentMonth);
   if(r.error){console.error('Batch delete error:',r.error);alert('Error clearing sales: '+r.error.message);return;}
   await loadSalesFromDb();
-  // Check if any remain (shouldn't, but just in case)
   var remaining=getSales().length;
   renderDeletedList();
   refresh();
@@ -1268,10 +1265,40 @@ function parseCSV(text){
 async function parseExcel(file){
   showProcessing('Reading Excel file…');
   if(!window.XLSX){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';document.head.appendChild(s);await new Promise(res=>s.onload=res);}
-  var data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array'});
-  var ws=wb.Sheets[wb.SheetNames[0]],json=XLSX.utils.sheet_to_json(ws,{defval:''});
-  if(!json.length){hideProcessing();alert('No data found in spreadsheet.');return;}
-  hideProcessing();mapAndPreview(json,Object.keys(json[0]));
+  var data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array',cellDates:true});
+  // Smart sheet selection: find the sheet with the most actual sales data rows
+  var bestSheet=null,bestCount=0,bestJson=null;
+  var skipPatterns=['rules','formula lake','drop down','yearly goal','do not touch','path to quota','sheet1'];
+  for(var si=0;si<wb.SheetNames.length;si++){
+    var sn=wb.SheetNames[si],snl=sn.toLowerCase().trim();
+    if(skipPatterns.some(function(sk){return snl.includes(sk);}))continue;
+    var ws=wb.Sheets[sn],json=XLSX.utils.sheet_to_json(ws,{defval:''});
+    if(!json.length)continue;
+    var headers=Object.keys(json[0]);
+    // Count rows that look like real sales data
+    var dataCount=0;
+    for(var ri=0;ri<json.length;ri++){
+      var row=json[ri],m={};
+      headers.forEach(function(h){m[mapField(h)]=row[h];});
+      var acct=String(m.account||'').trim();
+      var amt=parseFloat(String(m.amount||'0').replace(/[$,]/g,''))||0;
+      var comm=parseFloat(String(m.commission||'0').replace(/[$,]/g,''))||0;
+      if(acct.length>0&&(amt>0||comm>0))dataCount++;
+    }
+    console.log('Sheet "'+sn+'": '+dataCount+' data rows detected');
+    if(dataCount>bestCount){bestCount=dataCount;bestSheet=sn;bestJson=json;}
+  }
+  // Fallback: if no good sheet found via mapping, try all sheets by row count
+  if(!bestJson||!bestCount){
+    for(var si=0;si<wb.SheetNames.length;si++){
+      var ws=wb.Sheets[wb.SheetNames[si]];
+      var json=XLSX.utils.sheet_to_json(ws,{defval:''});
+      if(json.length>bestCount){bestCount=json.length;bestSheet=wb.SheetNames[si];bestJson=json;}
+    }
+  }
+  if(!bestJson||!bestJson.length){hideProcessing();alert('No data found in spreadsheet.');return;}
+  console.log('Selected sheet: "'+bestSheet+'" with '+bestCount+' data rows');
+  hideProcessing();mapAndPreview(bestJson,Object.keys(bestJson[0]));
 }
 async function extractWithAI(file){
   var apiKey=getApiKey();if(!apiKey){alert('Please save your Anthropic API key first.');return;}
@@ -1330,12 +1357,11 @@ function showProcessing(msg){document.getElementById('importProcessing').style.d
 function hideProcessing(){document.getElementById('importProcessing').style.display='none';}
 function mapField(h){
   var hh=(h||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  // Explicitly skip monthly aggregate/summary columns — these are NOT per-sale fields
-  if(hh.match(/(totalcommission|totalrevenue|totaltax|totalwith|monthlymargintotal|totalmarg)/))return'_skip_'+h;
-  if(hh.match(/(account|company|enduser|customer|tradename)/))return'account';
+  // Skip monthly aggregate/summary/tax columns — NOT per-sale fields
+  if(hh.match(/(totalcommission|totalrevenue|totaltax|totalwith|monthlymargintotal|totalmarg|totalrevenueforthe|totalcommissionforthe|totaltaxper)/))return'_skip_'+h;
+  if(hh.match(/(account|company|enduser|customer|tradename|accountname)/))return'account';
   if(hh.match(/(productname|product|description|item)/))return'product';
   if(hh.match(/(salesamount|saleamount|pretax|^amount$|acv|billing)/))return'amount';
-  // Fallback for "amount" but only if not a total/summary column
   if(hh.match(/(amount)/)&&!hh.match(/(total|monthly|permonth)/))return'amount';
   if(hh.match(/(margindollar|margindol)/))return'marginDol';
   if(hh.match(/(manualmargin|^margin$|^marginpercent$|^marginpct$)/))return'margin';
@@ -1348,17 +1374,24 @@ function mapField(h){
   if(hh.match(/(ordernumber|ordernum|^order$)/))return'order';
   if(hh.match(/(category|type)/))return'category';
   if(hh.match(/(paidstatus|^paid$|^status$)/))return'paid';
+  if(hh.match(/(^term$|termlength)/))return'term';
+  if(hh.match(/(nextpaymentdate|nextpayment)/))return'nextPaymentDate';
+  if(hh.match(/(^tax$)/))return'_skip_tax';
   return h;
 }
 function mapAndPreview(rows,headers){
   if(!rows.length){alert('No data rows found.');return;}
   var mappedHeaders=headers.map(mapField);
+  // Filter out blank rows and non-data rows
   rows=rows.filter(row=>{
     var m={};headers.forEach((h,i)=>m[mapField(h)]=row[h]);
     var account=String(m.account||'').trim();
     var amount=parseFloat(String(m.amount||'0').replace(/[$,]/g,''))||0;
     var commission=parseFloat(String(m.commission||'0').replace(/[$,]/g,''))||0;
-    var hasAcct=account.length>0&&!['unknown','total','grand total'].includes(account.toLowerCase());
+    // Skip rows where ALL values are empty/null/zero
+    var allEmpty=headers.every(function(h){var v=row[h];return v===''||v===null||v===undefined||v===0;});
+    if(allEmpty)return false;
+    var hasAcct=account.length>0&&!['unknown','total','grand total',''].includes(account.toLowerCase());
     return hasAcct&&(amount>0||commission>0);
   });
   if(!rows.length){alert('No valid data rows found.');return;}
@@ -1371,6 +1404,8 @@ function mapAndPreview(rows,headers){
     var cells=displayCols.map((mh,ci)=>{
       var val=row[headers[ci]]!==undefined?row[headers[ci]]:'';
       if(typeof val==='number')val=val<1&&val>0?(val*100).toFixed(1)+'%':'$'+val.toFixed(2);
+      // Handle Date objects from SheetJS cellDates
+      if(val instanceof Date)val=val.getFullYear()+'-'+String(val.getMonth()+1).padStart(2,'0')+'-'+String(val.getDate()).padStart(2,'0');
       return'<td title="'+String(val).replace(/"/g,'&quot;')+'">'+val+'</td>';
     }).join('');
     return'<tr id="import-row-'+idx+'"><td><button class="ir-toggle inc" onclick="toggleImportRow('+idx+')">✓</button></td>'+cells+'</tr>';
@@ -1382,6 +1417,24 @@ function toggleImportRow(idx){
   if(importExcluded.has(idx)){importExcluded.delete(idx);document.getElementById('import-row-'+idx).classList.remove('row-excluded');document.getElementById('import-row-'+idx).querySelector('.ir-toggle').classList.add('inc');document.getElementById('import-row-'+idx).querySelector('.ir-toggle').textContent='✓';}
   else{importExcluded.add(idx);document.getElementById('import-row-'+idx).classList.add('row-excluded');document.getElementById('import-row-'+idx).querySelector('.ir-toggle').classList.remove('inc');document.getElementById('import-row-'+idx).querySelector('.ir-toggle').textContent='✗';}
   document.getElementById('importCountBadge').textContent=(importedRows.length-importExcluded.size)+' of '+importedRows.length+' rows';
+}
+function parseImportDate(str){
+  if(!str)return null;str=String(str).trim();var d=null;
+  // Handle Date objects directly (from SheetJS cellDates:true)
+  if(str==='[object Date]')return null; // shouldn't happen but safety
+  // Handle ISO datetime: "2026-02-13T00:00:00.000Z"
+  if(str.match(/^\d{4}-\d{2}-\d{2}T/)){d=new Date(str);}
+  // Handle "Mon Feb 02 2026 00:00:00" style from Date.toString()
+  if(!d&&str.match(/^[A-Z][a-z]{2}\s/)){d=new Date(str);}
+  // Handle SheetJS formatted date strings like "2/13/26" or "2/13/2026" or "02-13-2026"
+  if(!d){var mdy=str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);if(mdy){var yr=parseInt(mdy[3]);if(yr<100)yr+=2000;d=new Date(yr,parseInt(mdy[1])-1,parseInt(mdy[2]));}}
+  // Handle YYYY-MM-DD
+  if(!d){var ymd=str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);if(ymd)d=new Date(parseInt(ymd[1]),parseInt(ymd[2])-1,parseInt(ymd[3]));}
+  // Handle Excel serial date number
+  if(!d){var serial=parseFloat(str);if(serial>40000&&serial<60000)d=new Date((serial-25569)*86400*1000);}
+  if(!d||isNaN(d.getTime()))return null;
+  var yyyy=d.getFullYear(),mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
+  return{date:yyyy+'-'+mm+'-'+dd,month:yyyy+'-'+mm};
 }
 async function confirmImport(){
   if(!currentUser){alert('Please log in first.');return;}
@@ -1400,20 +1453,26 @@ async function confirmImport(){
     var payoutRate=parseFloat(String(mapped.payoutRate||'0').replace(/[%$,]/g,''));
     if(payoutRate>1)payoutRate/=100;
     var tier=parseInt(String(mapped.tier||'0').replace(/[^0-9]/g,''))||0;
-    var account=String(mapped.account||'').trim(),product=String(mapped.product||'').trim();
+    var account=String(mapped.account||'').trim();
+    var product=String(mapped.product||'').trim();
     var category=String(mapped.category||'').trim()||guessCategory(product);
     var marginDol=marginDolDirect>0?marginDolDirect:(marginPct>0?amount*marginPct:(commission&&payoutRate>0?commission/payoutRate:0));
     if(!marginPct&&amount>0&&marginDol>0)marginPct=marginDol/amount;
     if(!payoutRate&&marginDol>0&&commission>0)payoutRate=commission/marginDol;
     if(!commission&&marginDol>0&&payoutRate>0)commission=marginDol*payoutRate;
+    // Detect MYAB from term field
+    var termVal=String(mapped.term||'').trim().toUpperCase();
+    var isMyab=termVal==='MYAB'||termVal.includes('MYAB');
     var rowDate=mapped.date||'',targetMonth=currentMonth,parsedDate='';
     if(monthSetting!=='auto')targetMonth=monthSetting;
     else if(rowDate){
       var dateStr=String(rowDate);
-      if(rowDate instanceof Date||dateStr.match(/^\d{4}-\d{2}-\d{2}T/)){
-        var dateObj=rowDate instanceof Date?rowDate:new Date(dateStr);
-        if(!isNaN(dateObj.getTime())){var yy=dateObj.getFullYear(),mm=String(dateObj.getMonth()+1).padStart(2,'0'),dd=String(dateObj.getDate()).padStart(2,'0');parsedDate=yy+'-'+mm+'-'+dd;targetMonth=yy+'-'+mm;}
+      // Handle Date objects from SheetJS cellDates
+      if(rowDate instanceof Date&&!isNaN(rowDate.getTime())){
+        var yy=rowDate.getFullYear(),mmm=String(rowDate.getMonth()+1).padStart(2,'0'),ddd=String(rowDate.getDate()).padStart(2,'0');
+        parsedDate=yy+'-'+mmm+'-'+ddd;targetMonth=yy+'-'+mmm;
       }
+      // Try all date formats via parseImportDate
       if(!parsedDate){var dm=parseImportDate(dateStr);if(dm){targetMonth=dm.month;parsedDate=dm.date;}}
     }
     if(!monthCounts[targetMonth])monthCounts[targetMonth]=0;monthCounts[targetMonth]++;
@@ -1422,7 +1481,18 @@ async function confirmImport(){
       var found=salesCache.find(s=>s.account&&s.account.toLowerCase().includes(account.toLowerCase().substring(0,10))&&Math.abs(s.amount-amount)<1);
       if(found){found.paid=true;found.paidDate=parsedDate||new Date().toISOString().split('T')[0];if(commission>0)found.commission=commission;await updateSaleInDb(found.id,{paid:true,paidDate:found.paidDate,commission:found.commission});count++;continue;}
     }
-    var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:mapped.order||mapped.invoice||'',product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:'',noRevAttainment:false,halfRev:false,paid:isPayout,paidDate:isPayout?(parsedDate||new Date().toISOString().split('T')[0]):null};
+    // Determine special rule from file data
+    var special='';
+    if(isMyab)special='myaps_multi';
+    // Check if new Autodesk/Bluebeam product (halfRev) — only for FY27+ months
+    var halfRev=false;
+    if(!isLegacy(targetMonth)){
+      var prodLower=(product||'').toLowerCase();
+      var isNewBizProd=(prodLower.includes('new')||prodLower.includes('bluebeam'));
+      var isAdskProd=(prodLower.includes('autodesk')||prodLower.includes('bluebeam'));
+      halfRev=isNewBizProd&&isAdskProd;
+    }
+    var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:mapped.order||mapped.invoice||'',product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:special,noRevAttainment:false,halfRev:halfRev,paid:isPayout,paidDate:isPayout?(parsedDate||new Date().toISOString().split('T')[0]):null};
     var result=await insertSaleToDb(entry,targetMonth);
     if(result)count++;else errors++;
   }
@@ -1431,15 +1501,6 @@ async function confirmImport(){
   var re=document.getElementById('importResult');re.style.display='block';
   re.innerHTML='<div style="background:var(--atg-sky);border:1px solid var(--atg-sky-deep);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:22px;margin-bottom:6px;">✅</div><div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;letter-spacing:.3px;">'+count+' ROWS IMPORTED</div>'+(errors?'<div style="font-size:12px;color:var(--red);margin-top:4px;">'+errors+' errors</div>':'')+'<div style="font-size:12px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div></div>';
   document.getElementById('importPreview').style.display='none';importedRows=[];
-}
-function parseImportDate(str){
-  if(!str)return null;str=String(str).trim();var d=null;
-  var mdy=str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);if(mdy)d=new Date(parseInt(mdy[3]),parseInt(mdy[1])-1,parseInt(mdy[2]));
-  if(!d){var ymd=str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);if(ymd)d=new Date(parseInt(ymd[1]),parseInt(ymd[2])-1,parseInt(ymd[3]));}
-  if(!d){var serial=parseFloat(str);if(serial>40000&&serial<60000)d=new Date((serial-25569)*86400*1000);}
-  if(!d||isNaN(d.getTime()))return null;
-  var yyyy=d.getFullYear(),mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
-  return{date:yyyy+'-'+mm+'-'+dd,month:yyyy+'-'+mm};
 }
 function cancelImport(){importedRows=[];importExcluded=new Set();document.getElementById('importPreview').style.display='none';document.getElementById('importResult').style.display='none';document.getElementById('importTypeSection').style.display='none';}
 function guessCategory(product){
