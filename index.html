@@ -346,7 +346,7 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
   <div class="tabs">
     <div class="tab active" onclick="switchTab('add')">+ Add</div>
     <div class="tab" onclick="switchTab('sales')">Log</div>
-    <div class="tab" onclick="switchTab('import')">Import</div>
+    <div class="tab" onclick="switchTab('import')">Sync</div>
     <div class="tab" onclick="switchTab('summary')">Summary</div>
     <div class="tab" onclick="switchTab('rates')">Rates</div>
     <div class="tab tab-del" onclick="switchTab('deleted')">Deleted</div>
@@ -460,12 +460,46 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
   </div>
 </div>
 
-<!-- ─── IMPORT PANEL ─── -->
+<!-- ─── SYNC PANEL ─── -->
 
 <div class="panel" id="panel-import">
+  <!-- EXPORT SECTION -->
+  <div class="card">
+    <div class="card-title" style="color:var(--atg-green);">Export to Excel</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Download your sales data as an .xlsx file. Edit in Excel, then re-upload — only new or changed rows will sync.</div>
+    <div class="f-group">
+      <label class="f-label">Export Range</label>
+      <select class="f-select" id="exportRange">
+        <option value="current">Current Month Only</option>
+        <option value="all" selected>All Months (Full History)</option>
+      </select>
+    </div>
+    <div class="f-group">
+      <label class="f-label">Format</label>
+      <select class="f-select" id="exportFormat">
+        <option value="atg" selected>ATG Format (matches Patrick's spreadsheet)</option>
+        <option value="simple">Simple (compact columns)</option>
+      </select>
+    </div>
+    <button class="btn-primary" onclick="exportToExcel()" style="background:linear-gradient(135deg,var(--atg-green),var(--atg-green-bright));">
+      ⬇ Download .xlsx
+    </button>
+    <div style="font-size:11px;color:var(--text-3);margin-top:8px;line-height:1.6;">
+      <b>Workflow:</b> Export → edit in Excel → re-upload below.<br>
+      Existing rows update in place. New rows get added. Nothing gets doubled.
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 0;">
+    <div style="flex:1;height:1px;background:var(--border);"></div>
+    <span style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Import / Re-sync</span>
+    <div style="flex:1;height:1px;background:var(--border);"></div>
+  </div>
+
+  <!-- IMPORT SECTION -->
   <div class="card">
     <div class="card-title">Import Sales & Payouts</div>
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Upload Excel/CSV, screenshots, or PDFs — or paste data directly.</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Upload Excel/CSV, screenshots, or PDFs — or paste data directly. Duplicates are auto-skipped.</div>
     <div class="f-group">
       <label class="f-label">Anthropic API Key (for AI extraction)</label>
       <div style="display:flex;gap:8px;">
@@ -1219,6 +1253,96 @@ function switchTab(tab){
   if(tab==='deleted')renderDeletedList();
 }
 
+// ── EXPORT TO EXCEL ──
+async function exportToExcel(){
+  if(!currentUser){alert('Please log in first.');return;}
+  if(!window.XLSX){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';document.head.appendChild(s);await new Promise(res=>s.onload=res);}
+  var range=document.getElementById('exportRange').value;
+  var format=document.getElementById('exportFormat').value;
+  // Fetch sales data
+  var allSales=[];
+  if(range==='current'){
+    allSales=salesCache.slice();
+  } else {
+    // Fetch all months
+    var offset=0,pageSize=1000;
+    while(true){
+      var r=await _supabase.from('sales').select('*').eq('user_id',currentUser.id).order('date',{ascending:true}).range(offset,offset+pageSize-1);
+      if(r.error||!r.data||!r.data.length)break;
+      allSales=allSales.concat(r.data.map(mapRow));
+      if(r.data.length<pageSize)break;
+      offset+=pageSize;
+    }
+  }
+  if(!allSales.length){alert('No sales data to export.');return;}
+  // Sort by date
+  allSales.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
+  var wb=XLSX.utils.book_new();
+  if(format==='atg'){
+    // ATG format — matches Patrick's commission spreadsheet headers
+    var headers=['Month','Account Name','Order Number','Product Name','Category',
+      'Sales Amount (Pre-Tax)','Manual Margin %','Margin %','Margin Dollars',
+      'Revenue Tier','Payout Rate (%)','Commission Earned ($)','Term',
+      'Half Rev (50%)','Paid','Paid Date','Special'];
+    var rows=allSales.map(function(s){
+      var tierLabel=s.tier?'Tier '+s.tier:'';
+      var termLabel=s.special==='myaps_multi'?'MYAB':(s.special==='myab_yr23'?'MYAB Yr2/3':'N/A');
+      return[
+        s.date||'',
+        s.account||'',
+        s.order||'',
+        s.product||'',
+        s.category||'',
+        s.amount||0,
+        '',
+        s.marginPct||0,
+        s.marginDol||0,
+        tierLabel,
+        s.payoutRate||0,
+        s.commission||0,
+        termLabel,
+        s.halfRev?'Yes':'No',
+        s.paid?'Yes':'No',
+        s.paidDate||'',
+        s.special||''
+      ];
+    });
+    var wsData=[headers].concat(rows);
+    var ws=XLSX.utils.aoa_to_sheet(wsData);
+    // Set column widths
+    ws['!cols']=[{wch:12},{wch:28},{wch:22},{wch:45},{wch:26},{wch:18},{wch:14},{wch:10},{wch:14},{wch:12},{wch:12},{wch:18},{wch:10},{wch:12},{wch:8},{wch:12},{wch:14}];
+    // Format numbers
+    for(var ri=1;ri<=rows.length;ri++){
+      var r=ri+1; // 1-indexed, +1 for header
+      // Sales Amount
+      if(ws[XLSX.utils.encode_cell({r:ri,c:5})])ws[XLSX.utils.encode_cell({r:ri,c:5})].t='n';
+      // Margin % as decimal
+      if(ws[XLSX.utils.encode_cell({r:ri,c:7})])ws[XLSX.utils.encode_cell({r:ri,c:7})].t='n';
+      // Margin $
+      if(ws[XLSX.utils.encode_cell({r:ri,c:8})])ws[XLSX.utils.encode_cell({r:ri,c:8})].t='n';
+      // Payout rate as decimal
+      if(ws[XLSX.utils.encode_cell({r:ri,c:10})])ws[XLSX.utils.encode_cell({r:ri,c:10})].t='n';
+      // Commission
+      if(ws[XLSX.utils.encode_cell({r:ri,c:11})])ws[XLSX.utils.encode_cell({r:ri,c:11})].t='n';
+    }
+    XLSX.utils.book_append_sheet(wb,ws,'Commission Data');
+  } else {
+    // Simple format
+    var headers=['Date','Account','Order','Product','Category','Amount','Margin %','Margin $','Payout Rate','Commission','Tier','Paid','Special'];
+    var rows=allSales.map(function(s){
+      return[s.date||'',s.account||'',s.order||'',s.product||'',s.category||'',
+        s.amount||0,s.marginPct||0,s.marginDol||0,s.payoutRate||0,s.commission||0,
+        s.tier||'',s.paid?'Yes':'No',s.special||''];
+    });
+    var ws=XLSX.utils.aoa_to_sheet([headers].concat(rows));
+    ws['!cols']=[{wch:12},{wch:28},{wch:20},{wch:40},{wch:24},{wch:14},{wch:10},{wch:12},{wch:12},{wch:14},{wch:8},{wch:8},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'Sales');
+  }
+  // Generate and download
+  var fileName='ATG_Commission_'+(range==='current'?currentMonth:'All')+'_'+currentRep.replace(/\s+/g,'_')+'.xlsx';
+  XLSX.writeFile(wb,fileName);
+}
+
 // ── IMPORT ──
 let importedRows=[],importExcluded=new Set();
 function saveApiKey(){var k=document.getElementById('importApiKey').value.trim();if(!k||!k.startsWith('sk-ant-')){showApiKeyStatus('Invalid key',true);return;}localStorage.setItem('atg_anthropic_key',k);showApiKeyStatus('API key saved!',false);}
@@ -1439,15 +1563,15 @@ function parseImportDate(str){
 async function confirmImport(){
   if(!currentUser){alert('Please log in first.');return;}
   var monthSetting=document.getElementById('importMonth').value,importType=document.getElementById('importType').value;
-  var count=0,errors=0,skipped=0,monthCounts={};
+  var count=0,updated=0,errors=0,skipped=0,monthCounts={};
   showProcessing('Checking for duplicates…');
-  // Pre-load existing sales for all months we might import into, for dedup
+  // Pre-load existing sales for all months we might import into, for dedup + update
   var existingByMonth={};
   async function getExistingForMonth(mo){
     if(existingByMonth[mo])return existingByMonth[mo];
     var all=[],offset=0,pageSize=1000;
     while(true){
-      var r=await _supabase.from('sales').select('account,product,amount,order_number,date').eq('user_id',currentUser.id).eq('month',mo).range(offset,offset+pageSize-1);
+      var r=await _supabase.from('sales').select('id,account,product,amount,order_number,date,margin_pct,margin_dol,payout_rate,commission,paid,category').eq('user_id',currentUser.id).eq('month',mo).range(offset,offset+pageSize-1);
       if(r.error||!r.data||!r.data.length)break;
       all=all.concat(r.data);
       if(r.data.length<pageSize)break;
@@ -1456,7 +1580,7 @@ async function confirmImport(){
     existingByMonth[mo]=all;
     return all;
   }
-  function isDuplicate(existing,account,product,amount,order){
+  function findExistingMatch(existing,account,product,amount,order){
     var acctLower=account.toLowerCase().trim();
     var prodLower=product.toLowerCase().trim();
     var orderClean=(order||'').replace(/[\s\u2009]/g,'').toLowerCase();
@@ -1468,10 +1592,25 @@ async function confirmImport(){
       var exOrder=(ex.order_number||'').replace(/[\s\u2009]/g,'').toLowerCase();
       // Match: same account + same amount + (same product OR same order number)
       if(exAcct===acctLower&&Math.abs(exAmt-amount)<0.01){
-        if(exProd===prodLower)return true;
-        if(orderClean&&exOrder&&orderClean===exOrder)return true;
+        if(exProd===prodLower)return ex;
+        if(orderClean&&exOrder&&orderClean===exOrder)return ex;
       }
     }
+    return null;
+  }
+  function hasChanges(ex,marginPct,marginDol,payoutRate,commission,paid,category){
+    var exMargin=parseFloat(ex.margin_pct)||0;
+    var exMarginDol=parseFloat(ex.margin_dol)||0;
+    var exRate=parseFloat(ex.payout_rate)||0;
+    var exComm=parseFloat(ex.commission)||0;
+    var exPaid=!!ex.paid;
+    var exCat=(ex.category||'').trim();
+    if(marginPct>0&&Math.abs(exMargin-marginPct)>0.001)return true;
+    if(marginDol>0&&Math.abs(exMarginDol-marginDol)>0.01)return true;
+    if(payoutRate>0&&Math.abs(exRate-payoutRate)>0.001)return true;
+    if(commission>0&&Math.abs(exComm-commission)>0.01)return true;
+    if(paid&&!exPaid)return true;
+    if(category&&exCat&&category!==exCat)return true;
     return false;
   }
   showProcessing('Importing…');
@@ -1502,41 +1641,62 @@ async function confirmImport(){
     if(monthSetting!=='auto')targetMonth=monthSetting;
     else if(rowDate){
       var dateStr=String(rowDate);
-      // Handle Date objects from SheetJS cellDates
       if(rowDate instanceof Date&&!isNaN(rowDate.getTime())){
         var yy=rowDate.getFullYear(),mmm=String(rowDate.getMonth()+1).padStart(2,'0'),ddd=String(rowDate.getDate()).padStart(2,'0');
         parsedDate=yy+'-'+mmm+'-'+ddd;targetMonth=yy+'-'+mmm;
       }
-      // Try all date formats via parseImportDate
       if(!parsedDate){var dm=parseImportDate(dateStr);if(dm){targetMonth=dm.month;parsedDate=dm.date;}}
     }
-    // Check for duplicate before inserting
+    var isPayout=importType==='payout'||(importType==='auto'&&mapped.atgCommission);
+    var paidVal=isPayout;
+    // Check mapped paid field from file
+    var paidStr=String(mapped.paid||'').toLowerCase().trim();
+    if(paidStr==='yes'||paidStr==='true'||paidStr==='1')paidVal=true;
+    // Check for existing match
     var existing=await getExistingForMonth(targetMonth);
-    if(isDuplicate(existing,account,product,amount,order)){
-      skipped++;continue;
+    var match=findExistingMatch(existing,account,product,amount,order);
+    if(match){
+      // Row exists — check if anything changed
+      if(hasChanges(match,marginPct,marginDol,payoutRate,commission,paidVal,category)){
+        var updates={};
+        if(marginPct>0)updates.marginPct=marginPct;
+        if(marginDol>0)updates.marginDol=marginDol;
+        if(payoutRate>0)updates.payoutRate=payoutRate;
+        if(commission>0)updates.commission=commission;
+        if(paidVal&&!match.paid){updates.paid=true;updates.paidDate=parsedDate||new Date().toISOString().split('T')[0];}
+        if(category&&category!==(match.category||'').trim())updates.category=category;
+        await updateSaleInDb(match.id,updates);
+        // Update local cache too
+        Object.assign(match,updates);
+        updated++;
+      } else {
+        skipped++;
+      }
+      continue;
     }
     if(!monthCounts[targetMonth])monthCounts[targetMonth]=0;monthCounts[targetMonth]++;
-    var isPayout=importType==='payout'||(importType==='auto'&&mapped.atgCommission);
-    if(isPayout&&account!=='Unknown'){
-      var found=salesCache.find(s=>s.account&&s.account.toLowerCase().includes(account.toLowerCase().substring(0,10))&&Math.abs(s.amount-amount)<1);
-      if(found){found.paid=true;found.paidDate=parsedDate||new Date().toISOString().split('T')[0];if(commission>0)found.commission=commission;await updateSaleInDb(found.id,{paid:true,paidDate:found.paidDate,commission:found.commission});count++;continue;}
-    }
     // Determine special rule from file data
     var special='';
     if(isMyab)special='myaps_multi';
     var halfRev=false;
-    var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:order,product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:special,noRevAttainment:false,halfRev:halfRev,paid:isPayout,paidDate:isPayout?(parsedDate||new Date().toISOString().split('T')[0]):null};
+    var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:order,product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:special,noRevAttainment:false,halfRev:halfRev,paid:paidVal,paidDate:paidVal?(parsedDate||new Date().toISOString().split('T')[0]):null};
     var result=await insertSaleToDb(entry,targetMonth);
     if(result){
       count++;
-      // Add to existing cache so subsequent rows in the same import don't double up
-      existing.push({account:account,product:product,amount:amount,order_number:order,date:parsedDate||''});
+      existing.push({id:result.id,account:account,product:product,amount:amount,order_number:order,date:parsedDate||'',margin_pct:marginPct,margin_dol:marginDol,payout_rate:payoutRate,commission:commission,paid:paidVal,category:category});
     }else errors++;
   }
   hideProcessing();await loadSalesFromDb();refresh();
   var breakdown=Object.keys(monthCounts).sort().map(mo=>getMonthLabel(mo)+': '+monthCounts[mo]+' sales').join('<br>');
   var re=document.getElementById('importResult');re.style.display='block';
-  re.innerHTML='<div style="background:var(--atg-sky);border:1px solid var(--atg-sky-deep);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:22px;margin-bottom:6px;">✅</div><div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;letter-spacing:.3px;">'+count+' NEW ROWS IMPORTED</div>'+(skipped?'<div style="font-size:12px;color:var(--text-3);margin-top:4px;">'+skipped+' duplicates skipped</div>':'')+(errors?'<div style="font-size:12px;color:var(--red);margin-top:4px;">'+errors+' errors</div>':'')+'<div style="font-size:12px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div></div>';
+  var parts=['<div style="font-size:22px;margin-bottom:6px;">✅</div>'];
+  if(count)parts.push('<div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;letter-spacing:.3px;">'+count+' NEW ROWS ADDED</div>');
+  if(updated)parts.push('<div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--gold);font-size:14px;margin-top:4px;">'+updated+' existing rows updated</div>');
+  if(skipped)parts.push('<div style="font-size:12px;color:var(--text-3);margin-top:4px;">'+skipped+' unchanged (skipped)</div>');
+  if(!count&&!updated)parts.push('<div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--text-3);font-size:14px;">Everything already in sync!</div>');
+  if(errors)parts.push('<div style="font-size:12px;color:var(--red);margin-top:4px;">'+errors+' errors</div>');
+  if(breakdown)parts.push('<div style="font-size:12px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div>');
+  re.innerHTML='<div style="background:var(--atg-sky);border:1px solid var(--atg-sky-deep);border-radius:12px;padding:16px;text-align:center;">'+parts.join('')+'</div>';
   document.getElementById('importPreview').style.display='none';importedRows=[];
 }
 function cancelImport(){importedRows=[];importExcluded=new Set();document.getElementById('importPreview').style.display='none';document.getElementById('importResult').style.display='none';document.getElementById('importTypeSection').style.display='none';}
