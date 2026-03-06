@@ -1317,12 +1317,18 @@ function showProcessing(msg){document.getElementById('importProcessing').style.d
 function hideProcessing(){document.getElementById('importProcessing').style.display='none';}
 function mapField(h){
   var hh=(h||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  // Explicitly skip monthly aggregate/summary columns — these are NOT per-sale fields
+  if(hh.match(/(totalcommission|totalrevenue|totaltax|totalwith|monthlymargintotal|totalmarg)/))return'_skip_'+h;
   if(hh.match(/(account|company|enduser|customer|tradename)/))return'account';
   if(hh.match(/(productname|product|description|item)/))return'product';
-  if(hh.match(/(salesamount|saleamount|pretax|amount|acv|billing|total|revenue(?!tier))/))return'amount';
-  if(hh.match(/(manualmargin|marginpct|margindollar|margindol)/))return'marginDol';
-  if(hh.match(/(margin)/))return'margin';
-  if(hh.match(/(commissionearned|repcommission|commissionamt|commission(?!pct))/))return'commission';
+  if(hh.match(/(salesamount|saleamount|pretax|^amount$|acv|billing)/))return'amount';
+  // Fallback for "amount" but only if not a total/summary column
+  if(hh.match(/(amount)/)&&!hh.match(/(total|monthly|permonth)/))return'amount';
+  if(hh.match(/(margindollar|margindol)/))return'marginDol';
+  if(hh.match(/(manualmargin|^margin$|^marginpercent$|^marginpct$)/))return'margin';
+  if(hh.match(/(margin)/)&&!hh.match(/(total|monthly|margindol)/))return'margin';
+  if(hh.match(/(commissionearned|repcommission|commissionamt)/))return'commission';
+  if(hh.match(/(commission)/)&&!hh.match(/(total|monthly|pct|percent)/))return'commission';
   if(hh.match(/(payoutrate|commissionpct|tierrate)/))return'payoutRate';
   if(hh.match(/(revenuetier|tierlevel|^tier$)/))return'tier';
   if(hh.match(/(attainmentdate|saledate|invoicedate|orderdate|^date$|^month$)/))return'date';
