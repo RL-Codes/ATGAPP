@@ -1484,14 +1484,7 @@ async function confirmImport(){
     // Determine special rule from file data
     var special='';
     if(isMyab)special='myaps_multi';
-    // Check if new Autodesk/Bluebeam product (halfRev) — only for FY27+ months
     var halfRev=false;
-    if(!isLegacy(targetMonth)){
-      var prodLower=(product||'').toLowerCase();
-      var isNewBizProd=(prodLower.includes('new')||prodLower.includes('bluebeam'));
-      var isAdskProd=(prodLower.includes('autodesk')||prodLower.includes('bluebeam'));
-      halfRev=isNewBizProd&&isAdskProd;
-    }
     var entry={date:parsedDate||new Date().toISOString().split('T')[0],account,order:mapped.order||mapped.invoice||'',product,category,amount,marginPct,marginDol,payoutRate,commission,tier,special:special,noRevAttainment:false,halfRev:halfRev,paid:isPayout,paidDate:isPayout?(parsedDate||new Date().toISOString().split('T')[0]):null};
     var result=await insertSaleToDb(entry,targetMonth);
     if(result)count++;else errors++;
