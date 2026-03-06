@@ -6,243 +6,273 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>ATG Commission Tracker</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #f4f7fb;
-  --card: #ffffff;
-  --card-hover: #fafcff;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --blue: #0073e6;
-  --blue-dark: #005bbf;
-  --blue-light: #e8f2ff;
-  --teal: #00a3b5;
-  --teal-light: #e0f7fa;
-  --green: #00a86b;
-  --green-light: #e6f7f1;
-  --orange: #f06a00;
-  --red: #e02d3c;
-  --gold: #d97706;
-  --gold-light: #fff8ec;
-  --text: #0f172a;
-  --text-2: #475569;
-  --text-3: #94a3b8;
-  --header: #0a1628;
-  --header-border: #1e2f4a;
-  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  /* ATG Brand Palette — from actual brand assets */
+  --atg-teal: #0d414e;        /* primary wallpaper teal */
+  --atg-teal-deep: #052e3a;   /* darkest brand teal */
+  --atg-teal-mid: #0f4d5b;    /* mid-tone teal */
+  --atg-teal-light: #1a6275;  /* lighter teal for accents */
+  --atg-green: #5ea63e;       /* brand green from LinkedIn banner */
+  --atg-green-bright: #7cc44a;/* bright brand green */
+  --atg-green-pale: #eaf5e3;  /* very light green tint */
+  --atg-sky: #e4f0f3;         /* teal-tinted light bg */
+  --atg-sky-deep: #c8dfe5;    /* deeper teal tint */
+
+  /* Clean neutrals */
+  --bg: #F3F5F6;
+  --bg-warm: #F9FAFB;
+  --card: #FFFFFF;
+  --card-hover: #FCFDFE;
+  --border: #E0E5E8;
+  --border-strong: #C5CDD3;
+
+  /* Accent colors */
+  --green: #4D9B34;
+  --green-light: #EDF7E9;
+  --green-muted: #C8E6BD;
+  --orange: #D97B1A;
+  --orange-light: #FFF6EB;
+  --red: #D4362C;
+  --red-light: #FEF0EF;
+  --gold: #C08B1A;
+  --gold-light: #FFF9EC;
+
+  /* Text hierarchy */
+  --text: #152028;
+  --text-2: #3F5463;
+  --text-3: #7E95A5;
+  --text-inv: #EEF3F5;
+
+  /* Header — matches wallpaper */
+  --header: #052e3a;
+  --header-mid: #0a3d4b;
+  --header-border: #1a6275;
+
+  /* Shadows — teal-tinted */
+  --shadow: 0 1px 3px rgba(5,46,58,0.06), 0 1px 2px rgba(5,46,58,0.04);
+  --shadow-md: 0 4px 12px rgba(5,46,58,0.08), 0 2px 4px rgba(5,46,58,0.04);
+  --shadow-lg: 0 8px 24px rgba(5,46,58,0.10);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; padding-bottom: 80px; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; padding-bottom: 80px; -webkit-font-smoothing: antialiased; }
 
 /* ─── LOADING ─── */
-#loadingScreen { position: fixed; inset: 0; background: var(–header); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+#loadingScreen { position: fixed; inset: 0; background: var(--header); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
 .load-logo { display: flex; align-items: center; gap: 10px; }
-.load-badge { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, var(–blue), var(–teal)); display: flex; align-items: center; justify-content: center; font-family: ‘Barlow Condensed’, sans-serif; font-weight: 800; font-size: 18px; color: #fff; box-shadow: 0 0 20px rgba(0,163,181,0.4); }
-.load-title { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 22px; color: #fff; letter-spacing: 0.5px; }
-.load-sub { font-size: 11px; color: #64748b; }
-.spinner { width: 24px; height: 24px; border: 2px solid #1e3450; border-top-color: var(–teal); border-right-color: var(–green); border-radius: 50%; animation: spin .7s linear infinite; }
+.load-badge { width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, #0d414e, #1a6275); display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 16px; color: #fff; box-shadow: 0 0 24px rgba(13,65,78,0.35); letter-spacing: 0.5px; }
+.load-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 22px; color: #fff; letter-spacing: -0.3px; }
+.load-sub { font-size: 12px; color: #6B8DB5; font-family: 'DM Sans', sans-serif; }
+.spinner { width: 24px; height: 24px; border: 2.5px solid rgba(255,255,255,0.1); border-top-color: var(--atg-teal-mid); border-right-color: var(--atg-green-bright); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ─── AUTH ─── */
-#authOverlay { position: fixed; inset: 0; background: rgba(10,22,40,0.88); z-index: 999; display: none; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(6px); }
-.auth-card { background: var(–card); border-radius: 16px; padding: 28px; max-width: 360px; width: 100%; box-shadow: var(–shadow-md); border: 1px solid var(–border); }
+#authOverlay { position: fixed; inset: 0; background: rgba(5,46,58,0.85); z-index: 999; display: none; align-items: center; justify-content: center; padding: 24px; backdrop-filter: blur(8px); }
+.auth-card { background: var(--card); border-radius: 16px; padding: 28px; max-width: 360px; width: 100%; box-shadow: var(--shadow-lg); border: 1px solid var(--border); }
 .auth-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
-.auth-badge { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(–blue), var(–teal)); display: flex; align-items: center; justify-content: center; font-family: ‘Barlow Condensed’, sans-serif; font-weight: 800; font-size: 16px; color: #fff; }
-.auth-title { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 20px; color: var(–text); }
-.auth-sub { font-size: 11px; color: var(–text-2); margin-bottom: 18px; line-height: 1.5; }
-.auth-err { color: var(–red); font-size: 11px; margin-bottom: 10px; display: none; }
-.auth-toggle { display: block; text-align: center; margin-top: 14px; font-size: 11px; color: var(–text-3); text-decoration: none; }
-.auth-toggle:hover { color: var(–blue); }
+.auth-badge { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #0d414e, #1a6275); display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 14px; color: #fff; }
+.auth-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 20px; color: var(--text); }
+.auth-sub { font-size: 13px; color: var(--text-2); margin-bottom: 18px; line-height: 1.6; }
+.auth-err { color: var(--red); font-size: 12px; margin-bottom: 10px; display: none; }
+.auth-toggle { display: block; text-align: center; margin-top: 14px; font-size: 12px; color: var(--text-3); text-decoration: none; }
+.auth-toggle:hover { color: var(--atg-teal-mid); }
 
 /* ─── HEADER ─── */
-.header { background: var(–header); border-bottom: 1px solid var(–header-border); padding: 0 16px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 16px rgba(0,0,0,0.25); }
-.header-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 10px; border-bottom: 1px solid var(–header-border); }
-.logo { display: flex; align-items: center; gap: 8px; }
-.logo-badge { width: 30px; height: 30px; border-radius: 6px; background: linear-gradient(135deg, var(–blue) 0%, var(–teal) 55%, var(–green) 100%); display: flex; align-items: center; justify-content: center; font-family: ‘Barlow Condensed’, sans-serif; font-weight: 800; font-size: 14px; color: #fff; flex-shrink: 0; }
-.logo-text { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 15px; color: #e2eaf6; letter-spacing: 0.3px; }
-.logo-text em { color: var(–teal); font-style: normal; }
-.hdr-month { font-size: 10px; color: #4a6a8a; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 3px 9px; border-radius: 4px; font-family: ‘IBM Plex Mono’, monospace; }
+.header { background: linear-gradient(180deg, var(--header) 0%, var(--header-mid) 100%); border-bottom: 1px solid var(--header-border); padding: 0 16px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 20px rgba(5,46,58,0.3); }
+.header-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.logo { display: flex; align-items: center; gap: 9px; }
+.logo-badge { width: 32px; height: 32px; border-radius: 7px; background: linear-gradient(135deg, #0d414e 0%, #1a6275 100%); display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 12px; color: #fff; flex-shrink: 0; letter-spacing: 0.5px; box-shadow: 0 2px 8px rgba(13,65,78,0.3); }
+.logo-text { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; color: #E8F1FA; letter-spacing: -0.2px; }
+.logo-text em { color: var(--atg-green-bright); font-style: normal; text-shadow: 0 0 20px rgba(124,196,74,0.2); }
+.hdr-month { font-size: 11px; color: #8AADCF; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-weight: 500; }
 .header-bottom { padding: 10px 0; }
-.month-sel { width: 100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); color: #e2eaf6; font-family: ‘IBM Plex Mono’, monospace; font-size: 12px; padding: 7px 10px; border-radius: 7px; margin-bottom: 8px; }
+.month-sel { width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #E8F1FA; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 8px 11px; border-radius: 8px; margin-bottom: 8px; }
+.month-sel option { background: var(--header); color: #E8F1FA; }
 .user-row { display: flex; align-items: center; gap: 8px; }
-.user-lbl { font-size: 9px; color: #4a6a8a; text-transform: uppercase; letter-spacing: 1.2px; }
-#repNameDisplay { flex: 1; font-family: ‘Barlow’, sans-serif; font-weight: 600; font-size: 13px; color: var(–teal); }
-.btn-sm { background: none; border: 1px solid rgba(255,255,255,0.15); color: #5a7a9a; font-family: ‘IBM Plex Mono’, monospace; font-size: 10px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: all .2s; }
-.btn-sm:hover { border-color: var(–red); color: var(–red); }
-.legacy-bar { background: rgba(217,119,6,0.12); border: 1px solid rgba(217,119,6,0.3); border-radius: 6px; padding: 6px 12px; margin-top: 6px; font-size: 11px; color: #b45309; display: none; }
+.user-lbl { font-size: 10px; color: #6B8DB5; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
+#repNameDisplay { flex: 1; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; font-size: 13px; color: var(--atg-green-bright); }
+.btn-sm { background: none; border: 1px solid rgba(255,255,255,0.15); color: #7A9DC0; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; padding: 5px 12px; border-radius: 6px; cursor: pointer; transition: all .2s; }
+.btn-sm:hover { border-color: rgba(212,54,44,0.5); color: #E88; }
+.legacy-bar { background: rgba(217,123,26,0.12); border: 1px solid rgba(217,123,26,0.25); border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 12px; color: #C08B1A; display: none; font-weight: 500; }
 .legacy-bar.show { display: block; }
 
 /* ─── STAT CARDS ─── */
 .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px 0; }
-.stat { background: var(–card); border: 1px solid var(–border); border-radius: 12px; padding: 14px 14px 12px; box-shadow: var(–shadow); position: relative; overflow: hidden; }
-.stat::before { content: ‘’; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 12px 12px 0 0; }
-.stat.s-combo::before { background: linear-gradient(90deg, var(–blue), var(–teal), var(–green)); }
-.stat.s-teal::before { background: var(–teal); }
-.stat.s-gold::before { background: var(–gold); }
-.stat.s-green::before { background: var(–green); }
-.stat-lbl { font-size: 9px; color: var(–text-3); text-transform: uppercase; letter-spacing: 1.4px; margin-bottom: 8px; }
-.stat-val { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 26px; line-height: 1; }
-.stat-val.grad { background: linear-gradient(90deg, var(–blue), var(–teal), var(–green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.stat-val.teal { color: var(–teal); }
-.stat-val.gold { color: var(–gold); }
-.stat-val.green { color: var(–green); }
+.stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 14px 14px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+.stat::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 14px 14px 0 0; }
+.stat.s-combo::before { background: linear-gradient(90deg, var(--atg-teal), var(--atg-green), var(--atg-green-bright)); }
+.stat.s-teal::before { background: var(--atg-teal-mid); }
+.stat.s-gold::before { background: var(--gold); }
+.stat.s-green::before { background: var(--green); }
+.stat-lbl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; font-weight: 600; }
+.stat-val { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 26px; line-height: 1; letter-spacing: -0.5px; }
+.stat-val.grad { background: linear-gradient(135deg, var(--atg-teal) 0%, var(--atg-green) 50%, var(--atg-green-bright) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.stat-val.teal { color: var(--atg-teal-mid); }
+.stat-val.gold { color: var(--gold); }
+.stat-val.green { color: var(--green); }
 
 /* ─── TIER CARD ─── */
 .tier-wrap { padding: 12px 16px; }
-.tier-card { background: var(–card); border: 1px solid var(–border); border-radius: 12px; padding: 14px 16px; box-shadow: var(–shadow); }
+.tier-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; box-shadow: var(--shadow); }
 .tier-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.tier-card-lbl { font-size: 9px; color: var(–text-3); text-transform: uppercase; letter-spacing: 1.4px; }
-.tier-badge { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 12px; color: var(–gold); background: var(–gold-light); border: 1px solid rgba(217,119,6,0.25); padding: 3px 10px; border-radius: 5px; letter-spacing: 0.5px; }
-.tier-bar-track { background: var(–bg); border: 1px solid var(–border); border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 6px; }
-.tier-bar-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(–blue) 0%, var(–teal) 55%, var(–green) 100%); transition: width .6s ease; }
-.tier-hints { display: flex; justify-content: space-between; font-size: 10px; color: var(–text-3); margin-bottom: 12px; }
-.tier-grid { display: grid; gap: 6px; }
+.tier-card-lbl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600; }
+.tier-badge { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 12px; color: var(--atg-teal); background: var(--atg-sky); border: 1px solid var(--atg-sky-deep); padding: 4px 12px; border-radius: 6px; letter-spacing: 0.3px; }
+.tier-bar-track { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 8px; }
+.tier-bar-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--atg-teal) 0%, var(--atg-green) 60%, var(--atg-green-bright) 100%); transition: width .6s ease; }
+.tier-hints { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-3); margin-bottom: 12px; font-weight: 500; }
+.tier-grid { display: grid; gap: 8px; }
 .tier-grid.two { grid-template-columns: 1fr 1fr; }
 .tier-grid.four { grid-template-columns: repeat(4,1fr); }
-.tier-item { background: var(–bg); border: 1px solid var(–border); border-radius: 8px; padding: 8px 6px; text-align: center; transition: border-color .2s; }
-.tier-item.active { border-color: var(–gold); background: var(–gold-light); }
-.ti-name { font-size: 9px; color: var(–text-3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
-.ti-rate { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 13px; color: var(–text); }
-.tier-item.active .ti-rate { color: var(–gold); }
-.ti-range { font-size: 9px; color: var(–text-3); margin-top: 2px; }
+.tier-item { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 8px; text-align: center; transition: all .2s; }
+.tier-item.active { border-color: var(--atg-teal-mid); background: var(--atg-green-pale); box-shadow: 0 0 0 2px rgba(94,166,62,0.1); }
+.ti-name { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; font-weight: 600; }
+.ti-rate { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px; color: var(--text); }
+.tier-item.active .ti-rate { color: var(--atg-teal-mid); }
+.ti-range { font-size: 10px; color: var(--text-3); margin-top: 2px; }
 
 /* ─── TABS ─── */
 .tabs-wrap { padding: 0 16px 12px; overflow-x: auto; }
-.tabs { display: flex; gap: 5px; min-width: max-content; }
-.tab { padding: 8px 12px; background: var(–card); border: 1px solid var(–border); border-radius: 8px; color: var(–text-3); font-family: ‘IBM Plex Mono’, monospace; font-size: 10px; cursor: pointer; transition: all .2s; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; box-shadow: var(–shadow); }
-.tab:hover { color: var(–text-2); border-color: var(–border-strong); }
-.tab.active { background: linear-gradient(135deg, var(–blue) 0%, var(–teal) 100%); border-color: transparent; color: #fff; font-weight: 500; box-shadow: 0 2px 10px rgba(0,115,230,0.3); }
-.tab.tab-del.active { background: linear-gradient(135deg, #e02d3c 0%, #b91c2c 100%); box-shadow: 0 2px 10px rgba(224,45,60,0.3); }
+.tabs { display: flex; gap: 6px; min-width: max-content; }
+.tab { padding: 9px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-3); font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s; text-align: center; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; box-shadow: var(--shadow); }
+.tab:hover { color: var(--text-2); border-color: var(--border-strong); background: var(--bg-warm); }
+.tab.active { background: var(--atg-teal); border-color: var(--atg-teal); color: #fff; box-shadow: 0 2px 10px rgba(13,65,78,0.25); }
+.tab.tab-del.active { background: var(--red); border-color: var(--red); box-shadow: 0 2px 10px rgba(212,54,44,0.25); }
 
 /* ─── PANELS ─── */
 .panel { display: none; padding: 0 16px; }
 .panel.active { display: block; }
 
 /* ─── FORMS ─── */
-.card { background: var(–card); border: 1px solid var(–border); border-radius: 12px; padding: 18px; margin-bottom: 12px; box-shadow: var(–shadow); }
-.card-title { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; background: linear-gradient(90deg, var(–blue), var(–teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.f-group { margin-bottom: 11px; }
-.f-label { font-size: 9px; color: var(–text-3); text-transform: uppercase; letter-spacing: 1.4px; margin-bottom: 5px; display: block; }
-.f-input, .f-select { width: 100%; background: var(–bg); border: 1px solid var(–border); border-radius: 8px; color: var(–text); font-family: ‘IBM Plex Mono’, monospace; font-size: 13px; padding: 9px 11px; transition: border-color .2s, box-shadow .2s; }
-.f-input:focus, .f-select:focus { outline: none; border-color: var(–blue); box-shadow: 0 0 0 3px rgba(0,115,230,0.1); background: #fff; }
-.f-input::placeholder { color: var(–text-3); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.card-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 16px; color: var(--atg-teal); }
+.f-group { margin-bottom: 12px; }
+.f-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 5px; display: block; font-weight: 600; }
+.f-input, .f-select { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 12px; transition: border-color .2s, box-shadow .2s; }
+.f-input:focus, .f-select:focus { outline: none; border-color: var(--atg-teal-mid); box-shadow: 0 0 0 3px rgba(13,65,78,0.08); background: #fff; }
+.f-input::placeholder { color: var(--text-3); }
 .f-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.f-note { font-size: 10px; color: var(–text-3); margin-top: 4px; font-style: italic; }
+.f-note { font-size: 11px; color: var(--text-3); margin-top: 4px; font-style: italic; }
 
 /* ─── PREVIEW ─── */
-.comm-preview { background: linear-gradient(135deg, rgba(0,115,230,.05), rgba(0,163,181,.04), rgba(0,168,107,.05)); border: 1px solid rgba(0,163,181,.2); border-radius: 10px; padding: 12px 14px; margin-top: 6px; display: none; }
+.comm-preview { background: var(--atg-sky); border: 1px solid var(--atg-sky-deep); border-radius: 12px; padding: 14px 16px; margin-top: 8px; display: none; }
 .comm-preview.show { display: block; }
-.prev-row { display: flex; justify-content: space-between; font-size: 11px; color: var(–text-2); margin-bottom: 4px; }
-.prev-total { display: flex; justify-content: space-between; font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 18px; padding-top: 8px; border-top: 1px solid rgba(0,163,181,.18); margin-top: 8px; background: linear-gradient(90deg, var(–blue), var(–teal), var(–green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.prev-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-2); margin-bottom: 5px; }
+.prev-total { display: flex; justify-content: space-between; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 18px; padding-top: 10px; border-top: 1px solid var(--atg-sky-deep); margin-top: 8px; color: var(--atg-teal); }
 
 /* ─── BUTTONS ─── */
-.btn-primary { width: 100%; background: linear-gradient(135deg, var(–blue) 0%, var(–teal) 60%, var(–green) 100%); color: #fff; border: none; border-radius: 9px; padding: 13px; font-family: ‘Barlow’, sans-serif; font-weight: 700; font-size: 15px; cursor: pointer; margin-top: 12px; transition: opacity .2s, transform .1s; box-shadow: 0 2px 14px rgba(0,115,230,.22); letter-spacing: 0.3px; }
+.btn-primary { width: 100%; background: linear-gradient(135deg, var(--atg-teal) 0%, var(--atg-green) 100%); color: #fff; border: none; border-radius: 10px; padding: 14px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer; margin-top: 12px; transition: opacity .2s, transform .1s; box-shadow: 0 2px 12px rgba(13,65,78,0.2); letter-spacing: 0.2px; }
 .btn-primary:hover { opacity: .92; }
 .btn-primary:active { transform: scale(.98); }
-.btn-danger { width: 100%; background: #fff; color: var(–red); border: 1.5px solid var(–red); border-radius: 9px; padding: 11px; font-family: ‘Barlow’, sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 8px; transition: all .2s; }
-.btn-danger:hover { background: var(–red); color: #fff; }
-.btn-secondary { width: 100%; background: var(–bg); color: var(–text-2); border: 1px solid var(–border); border-radius: 9px; padding: 11px; font-family: ‘Barlow’, sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; margin-top: 8px; }
+.btn-danger { width: 100%; background: #fff; color: var(--red); border: 1.5px solid var(--red); border-radius: 10px; padding: 12px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 8px; transition: all .2s; }
+.btn-danger:hover { background: var(--red); color: #fff; }
+.btn-secondary { width: 100%; background: var(--bg); color: var(--text-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; font-size: 14px; cursor: pointer; margin-top: 8px; }
 
 /* ─── MYAB GROUP ─── */
-#myApsGroup { background: rgba(240,106,0,.05); border: 1px solid rgba(240,106,0,.2); border-radius: 9px; padding: 12px 14px; margin-bottom: 10px; display: none; }
+#myApsGroup { background: var(--orange-light); border: 1px solid rgba(217,123,26,.25); border-radius: 10px; padding: 14px; margin-bottom: 10px; display: none; }
 
 /* ─── SALES LIST ─── */
 .sec-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.sec-title { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
-.count-pill { font-size: 10px; background: var(–bg); border: 1px solid var(–border); padding: 2px 8px; border-radius: 12px; color: var(–text-3); font-family: ‘IBM Plex Mono’, monospace; }
-.sale-card { background: var(–card); border: 1px solid var(–border); border-left: 3px solid transparent; border-radius: 12px; padding: 13px; margin-bottom: 8px; box-shadow: var(–shadow); transition: border-color .2s; }
-.sale-card.paid { border-left-color: var(–green); }
-.sale-card.unpaid { border-left-color: rgba(224,45,60,.35); }
-.sale-card.deleted-card { border-left-color: var(–text-3); opacity: .85; }
-.sale-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 7px; }
-.sale-acct { font-family: ‘Barlow’, sans-serif; font-weight: 700; font-size: 14px; color: var(–text); }
-.sale-comm { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 18px; background: linear-gradient(90deg, var(–blue), var(–teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.sec-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 16px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text); }
+.count-pill { font-size: 11px; background: var(--atg-sky); border: 1px solid var(--atg-sky-deep); padding: 3px 10px; border-radius: 12px; color: var(--atg-teal); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+.sale-card { background: var(--card); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: 12px; padding: 14px; margin-bottom: 8px; box-shadow: var(--shadow); transition: all .2s; }
+.sale-card:hover { box-shadow: var(--shadow-md); }
+.sale-card.paid { border-left-color: var(--green); }
+.sale-card.unpaid { border-left-color: rgba(212,54,44,.3); }
+.sale-card.deleted-card { border-left-color: var(--text-3); opacity: .85; }
+.sale-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.sale-acct { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px; color: var(--text); }
+.sale-comm { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 18px; color: var(--atg-teal); letter-spacing: -0.3px; }
 .sale-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
-.chip { font-size: 9px; padding: 2px 7px; border-radius: 4px; background: var(–bg); border: 1px solid var(–border); color: var(–text-3); text-transform: uppercase; letter-spacing: 0.4px; }
-.chip.sw { border-color: rgba(0,115,230,.3); color: var(–blue); background: rgba(0,115,230,.05); }
-.chip.sv { border-color: rgba(217,119,6,.3); color: var(–gold); background: rgba(217,119,6,.05); }
-.chip.hw { border-color: rgba(240,106,0,.3); color: var(–orange); background: rgba(240,106,0,.05); }
-.chip.ge { border-color: rgba(0,163,181,.3); color: var(–teal); background: rgba(0,163,181,.05); }
-.sale-bot { display: flex; justify-content: space-between; font-size: 11px; color: var(–text-3); margin-top: 4px; }
-.btn-icon { background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 4px; font-size: 14px; transition: color .15s; color: var(–text-3); }
-.btn-icon:hover { color: var(–blue); }
-.btn-icon.del:hover { color: var(–red); }
-.payout-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; padding: 2px 8px; border-radius: 4px; cursor: pointer; border: 1px solid; user-select: none; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.4px; font-family: ‘IBM Plex Mono’, monospace; transition: all .15s; }
-.payout-badge.paid { background: rgba(0,168,107,.08); border-color: rgba(0,168,107,.3); color: var(–green); }
-.payout-badge.unpaid { background: rgba(224,45,60,.06); border-color: rgba(224,45,60,.25); color: var(–red); }
+.chip { font-size: 10px; padding: 3px 8px; border-radius: 5px; background: var(--bg); border: 1px solid var(--border); color: var(--text-3); text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; }
+.chip.sw { border-color: rgba(13,65,78,.2); color: var(--atg-teal); background: var(--atg-sky); }
+.chip.sv { border-color: rgba(192,139,26,.25); color: var(--gold); background: var(--gold-light); }
+.chip.hw { border-color: rgba(217,123,26,.25); color: var(--orange); background: var(--orange-light); }
+.chip.ge { border-color: rgba(94,166,62,.2); color: var(--atg-teal-mid); background: rgba(94,166,62,.06); }
+.sale-bot { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); margin-top: 4px; font-weight: 500; }
+.btn-icon { background: none; border: none; cursor: pointer; padding: 2px 5px; border-radius: 4px; font-size: 14px; transition: color .15s; color: var(--text-3); }
+.btn-icon:hover { color: var(--atg-teal-mid); }
+.btn-icon.del:hover { color: var(--red); }
+.payout-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; padding: 3px 9px; border-radius: 5px; cursor: pointer; border: 1px solid; user-select: none; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; font-family: 'DM Sans', sans-serif; font-weight: 600; transition: all .15s; }
+.payout-badge.paid { background: var(--green-light); border-color: var(--green-muted); color: var(--green); }
+.payout-badge.unpaid { background: var(--red-light); border-color: rgba(212,54,44,.2); color: var(--red); }
 .pb-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.empty-state { text-align: center; padding: 40px 20px; color: var(–text-3); }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text-3); }
 
 /* ─── FILTERS ─── */
 .filter-bar { display: flex; gap: 6px; margin-bottom: 10px; }
-.fb-btn { flex: 1; padding: 7px 4px; background: var(–card); border: 1px solid var(–border); border-radius: 8px; color: var(–text-3); font-size: 10px; cursor: pointer; text-align: center; text-transform: uppercase; letter-spacing: 0.4px; font-family: ‘IBM Plex Mono’, monospace; transition: all .2s; box-shadow: var(–shadow); }
-.fb-btn.active { background: #fff; border-color: var(–blue); color: var(–blue); }
+.fb-btn { flex: 1; padding: 8px 4px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-3); font-size: 11px; cursor: pointer; text-align: center; text-transform: uppercase; letter-spacing: 0.3px; font-family: 'DM Sans', sans-serif; font-weight: 600; transition: all .2s; box-shadow: var(--shadow); }
+.fb-btn.active { background: var(--atg-sky); border-color: var(--atg-teal-mid); color: var(--atg-teal); }
 
 /* ─── PAYOUT SUMMARY ─── */
-.pay-summary { background: var(–card); border: 1px solid var(–border); border-radius: 12px; padding: 14px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; box-shadow: var(–shadow); }
-.psl { font-size: 9px; color: var(–text-3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
-.psv { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 15px; }
-.psv.g { color: var(–green); }
-.psv.r { color: var(–red); }
-.psv.b { background: linear-gradient(90deg, var(–blue), var(–teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.pay-summary { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; box-shadow: var(--shadow); }
+.psl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-weight: 600; }
+.psv { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 16px; }
+.psv.g { color: var(--green); }
+.psv.r { color: var(--red); }
+.psv.b { color: var(--atg-teal); }
 
 /* ─── SUMMARY TABLE ─── */
-.sum-table { background: var(–card); border: 1px solid var(–border); border-radius: 12px; overflow: hidden; margin-bottom: 12px; box-shadow: var(–shadow); }
-.sum-row { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(–border); font-size: 12px; }
+.sum-table { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 12px; box-shadow: var(--shadow); }
+.sum-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .sum-row:last-child { border-bottom: none; }
-.sum-row.total { background: linear-gradient(135deg, rgba(0,115,230,.04), rgba(0,163,181,.03)); font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 15px; }
-.sk { color: var(–text-3); }
-.sv { color: var(–text); }
-.sv.grad { background: linear-gradient(90deg, var(–blue), var(–teal), var(–green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.sv.gold { color: var(–gold); }
+.sum-row.total { background: var(--atg-sky); font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; }
+.sk { color: var(--text-2); }
+.sv { color: var(--text); font-weight: 600; }
+.sv.grad { color: var(--atg-teal); }
+.sv.gold { color: var(--gold); }
 
 /* ─── RATES ─── */
 .prod-grid { display: grid; gap: 6px; margin-bottom: 12px; }
-.prod-row { background: var(–card); border: 1px solid var(–border); border-radius: 9px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(–shadow); }
-.prod-name { font-size: 12px; color: var(–text); flex: 1; }
-.prod-pct { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 13px; color: var(–blue); white-space: nowrap; }
-.prod-pct.manual { color: var(–text-3); font-size: 10px; }
+.prod-row { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow); }
+.prod-name { font-size: 13px; color: var(--text); flex: 1; }
+.prod-pct { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 13px; color: var(--atg-teal-mid); white-space: nowrap; }
+.prod-pct.manual { color: var(--text-3); font-size: 11px; }
 
 /* ─── IMPORT ─── */
 .import-mode-bar { display: flex; gap: 6px; margin-bottom: 12px; }
-.im-btn { flex: 1; padding: 8px; background: var(–bg); border: 1px solid var(–border); border-radius: 8px; color: var(–text-3); font-size: 10px; cursor: pointer; text-align: center; text-transform: uppercase; letter-spacing: 0.4px; font-family: ‘IBM Plex Mono’, monospace; transition: all .2s; }
-.im-btn.active { background: linear-gradient(135deg, var(–blue), var(–teal)); border-color: transparent; color: #fff; }
-#dropZone { border: 1.5px dashed var(–border-strong); border-radius: 10px; padding: 28px 20px; text-align: center; cursor: pointer; background: var(–bg); transition: all .2s; }
-#dropZone:hover, #dropZone.dragover { border-color: var(–blue); background: rgba(0,115,230,.03); }
-#importTable th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(–border); color: var(–text-3); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 500; }
-#importTable td { padding: 8px 6px; border-bottom: 1px solid var(–bg); color: var(–text); font-size: 11px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ir-toggle { background: none; border: 1px solid var(–border); color: var(–text-3); border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer; }
-.ir-toggle.inc { border-color: var(–blue); color: var(–blue); }
+.im-btn { flex: 1; padding: 9px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text-3); font-size: 11px; cursor: pointer; text-align: center; text-transform: uppercase; letter-spacing: 0.3px; font-family: 'DM Sans', sans-serif; font-weight: 600; transition: all .2s; }
+.im-btn.active { background: var(--atg-teal); border-color: var(--atg-teal); color: #fff; }
+#dropZone { border: 2px dashed var(--border-strong); border-radius: 12px; padding: 32px 20px; text-align: center; cursor: pointer; background: var(--bg-warm); transition: all .2s; }
+#dropZone:hover, #dropZone.dragover { border-color: var(--atg-teal-mid); background: var(--atg-sky); }
+#importTable th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+#importTable td { padding: 8px 6px; border-bottom: 1px solid var(--bg); color: var(--text); font-size: 12px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ir-toggle { background: none; border: 1px solid var(--border); color: var(--text-3); border-radius: 4px; padding: 2px 6px; font-size: 10px; cursor: pointer; }
+.ir-toggle.inc { border-color: var(--atg-teal-mid); color: var(--atg-teal-mid); }
 tr.row-excluded td { opacity: .3; text-decoration: line-through; }
 
 /* ─── EDIT MODAL ─── */
-.edit-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500; display: none; align-items: flex-end; justify-content: center; backdrop-filter: blur(3px); }
+.edit-overlay { position: fixed; inset: 0; background: rgba(5,46,58,0.55); z-index: 500; display: none; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px); }
 .edit-overlay.open { display: flex; }
-.edit-modal { background: var(–card); border-radius: 16px 16px 0 0; padding: 20px 18px 32px; width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 24px rgba(0,0,0,.12); position: relative; }
-.edit-modal::before { content: ‘’; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(–blue), var(–teal), var(–green)); border-radius: 16px 16px 0 0; }
+.edit-modal { background: var(--card); border-radius: 18px 18px 0 0; padding: 20px 18px 32px; width: 100%; max-width: 480px; max-height: 88vh; overflow-y: auto; box-shadow: 0 -4px 28px rgba(5,46,58,0.15); position: relative; }
+.edit-modal::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--atg-teal), var(--atg-green), var(--atg-green-bright)); border-radius: 18px 18px 0 0; }
 .edit-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.edit-title { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 800; font-size: 18px; background: linear-gradient(90deg, var(–blue), var(–teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-transform: uppercase; letter-spacing: 0.5px; }
-.edit-close { background: none; border: none; color: var(–text-3); font-size: 20px; cursor: pointer; padding: 0 4px; }
-.edit-close:hover { color: var(–red); }
+.edit-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 18px; color: var(--atg-teal); text-transform: uppercase; letter-spacing: 0.3px; }
+.edit-close { background: none; border: none; color: var(--text-3); font-size: 20px; cursor: pointer; padding: 0 4px; }
+.edit-close:hover { color: var(--red); }
 .edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .edit-grid .full { grid-column: 1/-1; }
-.edit-sec-lbl { font-size: 9px; color: var(–text-3); text-transform: uppercase; letter-spacing: 1.4px; margin: 10px 0 6px; grid-column: 1/-1; border-top: 1px solid var(–border); padding-top: 10px; }
-.myab-section { background: rgba(0,115,230,.04); border: 1px solid rgba(0,115,230,.15); border-radius: 9px; padding: 12px; margin-top: 4px; }
+.edit-sec-lbl { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 1.2px; margin: 10px 0 6px; grid-column: 1/-1; border-top: 1px solid var(--border); padding-top: 10px; font-weight: 600; }
+.myab-section { background: var(--atg-sky); border: 1px solid var(--atg-sky-deep); border-radius: 10px; padding: 12px; margin-top: 4px; }
 
 /* ─── DELETED TAB STYLES ─── */
-.deleted-banner { background: rgba(224,45,60,.06); border: 1px solid rgba(224,45,60,.2); border-radius: 10px; padding: 11px 14px; margin-bottom: 12px; font-size: 11px; color: var(–red); line-height: 1.6; }
-.restore-btn { background: none; border: 1px solid var(–green); color: var(–green); border-radius: 5px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-family: ‘IBM Plex Mono’, monospace; transition: all .2s; }
-.restore-btn:hover { background: var(–green); color: #fff; }
-.perm-del-btn { background: none; border: 1px solid rgba(224,45,60,.4); color: var(–red); border-radius: 5px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-family: ‘IBM Plex Mono’, monospace; transition: all .2s; }
-.perm-del-btn:hover { background: var(–red); color: #fff; }
-.days-left-chip { font-size: 9px; background: rgba(224,45,60,.07); border: 1px solid rgba(224,45,60,.2); color: var(–red); padding: 1px 6px; border-radius: 3px; }
+.deleted-banner { background: var(--red-light); border: 1px solid rgba(212,54,44,.15); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 12px; color: var(--red); line-height: 1.6; }
+.restore-btn { background: none; border: 1px solid var(--green); color: var(--green); border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; transition: all .2s; }
+.restore-btn:hover { background: var(--green); color: #fff; }
+.perm-del-btn { background: none; border: 1px solid rgba(212,54,44,.35); color: var(--red); border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; transition: all .2s; }
+.perm-del-btn:hover { background: var(--red); color: #fff; }
+.days-left-chip { font-size: 10px; background: var(--red-light); border: 1px solid rgba(212,54,44,.15); color: var(--red); padding: 2px 7px; border-radius: 4px; font-weight: 500; }
 
 /* ─── DANGER ZONE ─── */
-.danger-zone { background: var(–card); border: 1.5px solid rgba(224,45,60,.25); border-radius: 12px; padding: 18px; margin-bottom: 12px; box-shadow: var(–shadow); }
-.dz-title { font-family: ‘Barlow Condensed’, sans-serif; font-weight: 700; font-size: 15px; color: var(–red); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-.dz-note { font-size: 11px; color: var(–text-2); margin-bottom: 14px; line-height: 1.6; }
+.danger-zone { background: var(--card); border: 1.5px solid rgba(212,54,44,.2); border-radius: 14px; padding: 20px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.dz-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; color: var(--red); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px; }
+.dz-note { font-size: 12px; color: var(--text-2); margin-bottom: 14px; line-height: 1.7; }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 </style>
 
 </head>
@@ -269,7 +299,7 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
     <div class="f-group"><label class="f-label">Email</label><input class="f-input" id="authEmail" type="email" placeholder="you@atgusa.com"></div>
     <div class="f-group"><label class="f-label">Password</label><input class="f-input" id="authPassword" type="password" placeholder="Min 6 characters"></div>
     <button class="btn-primary" id="authPrimaryBtn" onclick="handleSignUp()">Create Account</button>
-    <button class="btn-primary" id="authSecondaryBtn" onclick="handleLogin()" style="display:none;background:linear-gradient(135deg,#1e3a5f,#0a1628);box-shadow:none;">Log In</button>
+    <button class="btn-primary" id="authSecondaryBtn" onclick="handleLogin()" style="display:none;background:linear-gradient(135deg,#052e3a,#0d414e);box-shadow:none;">Log In</button>
     <a href="#" class="auth-toggle" id="authToggle" onclick="toggleAuthMode(event)">Already have an account? Log in</a>
   </div>
 </div>
@@ -289,7 +319,7 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
       <span id="repNameDisplay"></span>
       <button class="btn-sm" onclick="handleLogout()">Logout</button>
     </div>
-    <div class="legacy-bar" id="legacyBanner">📋 Legacy comp plan (4-tier) — view only</div>
+    <div class="legacy-bar" id="legacyBanner">Legacy comp plan (4-tier) — view only</div>
   </div>
 </div>
 
@@ -319,14 +349,14 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
     <div class="tab" onclick="switchTab('import')">Import</div>
     <div class="tab" onclick="switchTab('summary')">Summary</div>
     <div class="tab" onclick="switchTab('rates')">Rates</div>
-    <div class="tab tab-del" onclick="switchTab('deleted')">🗑 Deleted</div>
+    <div class="tab tab-del" onclick="switchTab('deleted')">Deleted</div>
   </div>
 </div>
 
 <!-- ─── ADD PANEL ─── -->
 
 <div class="panel active" id="panel-add">
-  <div id="legacyAddNote" style="display:none;background:rgba(217,119,6,.08);border:1px solid rgba(217,119,6,.3);border-radius:9px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#b45309;">📋 Legacy month — enter payout rate manually.</div>
+  <div id="legacyAddNote" style="display:none;background:var(--orange-light);border:1px solid rgba(217,123,26,.25);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#b45309;">Legacy month — enter payout rate manually.</div>
   <div class="card">
     <div class="card-title">Log New Sale</div>
     <div class="f-group"><label class="f-label">Account</label><input class="f-input" id="inputAccount" type="text" placeholder="Client name"></div>
@@ -368,19 +398,19 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
       <select class="f-select" id="inputSpecial" onchange="onSpecialChange()">
         <option value="">None</option>
         <option value="first90">First 90 Days (auto Tier 2)</option>
-        <option value="myaps_multi">📅 MYABs Multi-Year (auto-schedule)</option>
+        <option value="myaps_multi">MYABs Multi-Year (auto-schedule)</option>
         <option value="myab_yr23">MYABs Year 2/3 (manual)</option>
       </select>
     </div>
     <div class="f-group" id="halfRevGroup">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-2);">
-        <input type="checkbox" id="inputHalfRev" onchange="updatePreview()" style="accent-color:var(--blue);width:15px;height:15px;cursor:pointer;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-2);">
+        <input type="checkbox" id="inputHalfRev" onchange="updatePreview()" style="accent-color:#0f4d5b;width:16px;height:16px;cursor:pointer;">
         <span>New business — 50% revenue recognition</span>
       </label>
       <div class="f-note" id="halfRevNote"></div>
     </div>
     <div id="myApsGroup">
-      <div style="font-size:9px;color:var(--orange);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:10px;">📅 MYABs Multi-Year Setup</div>
+      <div style="font-size:10px;color:var(--orange);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;font-weight:600;">MYABs Multi-Year Setup</div>
       <div class="f-row">
         <div class="f-group" style="margin-bottom:0"><label class="f-label">Term Length</label>
           <select class="f-select" id="inputMyApsTerm" onchange="updatePreview()"><option value="1">1 Year</option><option value="2">2 Years</option><option value="3" selected>3 Years</option></select>
@@ -389,7 +419,7 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
           <select class="f-select" id="inputMyApsStart" onchange="updatePreview()"></select>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text-2);margin-top:8px;line-height:1.7" id="myApsSchedulePreview"></div>
+      <div style="font-size:11px;color:var(--text-2);margin-top:8px;line-height:1.7" id="myApsSchedulePreview"></div>
     </div>
     <div class="f-row">
       <div class="f-group"><label class="f-label">Sale Amount</label><input class="f-input" id="inputAmount" type="number" placeholder="0.00" oninput="updatePreview()"></div>
@@ -418,15 +448,13 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
   </div>
   <div class="filter-bar">
     <div class="fb-btn active" data-filter="all" onclick="setFilter('all')">All</div>
-    <div class="fb-btn" data-filter="paid" onclick="setFilter('paid')">✅ Paid</div>
-    <div class="fb-btn" data-filter="unpaid" onclick="setFilter('unpaid')">⏳ Unpaid</div>
+    <div class="fb-btn" data-filter="paid" onclick="setFilter('paid')">Paid</div>
+    <div class="fb-btn" data-filter="unpaid" onclick="setFilter('unpaid')">Unpaid</div>
   </div>
   <div id="salesList"></div>
 
-  <!-- Clear All Data -->
-
   <div class="danger-zone" style="margin-top:16px;">
-    <div class="dz-title">⚠️ Danger Zone</div>
+    <div class="dz-title">Danger Zone</div>
     <div class="dz-note">Clear all sales for <strong id="clearMonthLabel"></strong>. Deleted entries move to the Deleted tab and are permanently removed after 30 days.</div>
     <button class="btn-danger" onclick="clearAllSales()">Clear All Sales This Month</button>
   </div>
@@ -436,15 +464,15 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
 
 <div class="panel" id="panel-import">
   <div class="card">
-    <div class="card-title">Import Sales &amp; Payouts</div>
-    <div style="font-size:11px;color:var(--text-2);margin-bottom:14px;">Upload Excel/CSV, screenshots, or PDFs — or paste data directly.</div>
+    <div class="card-title">Import Sales & Payouts</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Upload Excel/CSV, screenshots, or PDFs — or paste data directly.</div>
     <div class="f-group">
       <label class="f-label">Anthropic API Key (for AI extraction)</label>
       <div style="display:flex;gap:8px;">
         <input class="f-input" id="importApiKey" type="password" placeholder="sk-ant-..." style="flex:1;">
-        <button onclick="saveApiKey()" style="background:linear-gradient(135deg,var(--blue),var(--teal));color:#fff;border:none;border-radius:8px;padding:8px 14px;font-family:'Barlow',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Save</button>
+        <button onclick="saveApiKey()" style="background:linear-gradient(135deg,var(--atg-teal),var(--atg-green));color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Save</button>
       </div>
-      <div id="apiKeyStatus" style="font-size:11px;margin-top:4px;display:none;"></div>
+      <div id="apiKeyStatus" style="font-size:12px;margin-top:4px;display:none;"></div>
     </div>
     <div class="import-mode-bar">
       <button class="im-btn active" id="modeFile" onclick="setImportMode('file')">Upload File</button>
@@ -452,9 +480,9 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
     </div>
     <div id="importFileSection">
       <div id="dropZone" onclick="document.getElementById('importFileInput').click()">
-        <div style="font-size:28px;margin-bottom:8px;">📁</div>
-        <div style="font-family:'Barlow',sans-serif;font-weight:700;font-size:14px;color:var(--text);margin-bottom:4px;">Drop file or click to upload</div>
-        <div style="font-size:11px;color:var(--text-3);">Excel (.xlsx, .csv), Images (.png, .jpg), PDFs</div>
+        <div style="font-size:32px;margin-bottom:10px;">📁</div>
+        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:4px;">Drop file or click to upload</div>
+        <div style="font-size:12px;color:var(--text-3);">Excel (.xlsx, .csv), Images (.png, .jpg), PDFs</div>
       </div>
       <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv,.png,.jpg,.jpeg,.pdf" style="display:none;" onchange="handleFileSelect(event)">
     </div>
@@ -473,13 +501,13 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
       </div>
     </div>
     <div id="importProcessing" style="display:none;text-align:center;padding:20px;">
-      <div style="font-size:24px;margin-bottom:8px;">⏳</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--blue);font-size:16px;text-transform:uppercase;letter-spacing:1px;">Processing…</div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px;" id="importProcessingMsg"></div>
+      <div style="font-size:28px;margin-bottom:8px;">⏳</div>
+      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;text-transform:uppercase;letter-spacing:0.5px;">Processing…</div>
+      <div style="font-size:12px;color:var(--text-3);margin-top:4px;" id="importProcessingMsg"></div>
     </div>
     <div id="importPreview" style="display:none;margin-top:14px;">
-      <div class="sec-hdr"><div class="sec-title" style="color:var(--blue);">Preview</div><span class="count-pill" id="importCountBadge">0 rows</span></div>
-      <div style="font-size:11px;color:var(--text-3);margin-bottom:8px;" id="importDetectedType"></div>
+      <div class="sec-hdr"><div class="sec-title" style="color:var(--atg-green);">Preview</div><span class="count-pill" id="importCountBadge">0 rows</span></div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;" id="importDetectedType"></div>
       <div style="overflow-x:auto;margin-bottom:14px;">
         <table id="importTable" style="width:100%;border-collapse:collapse;"><thead id="importTableHead"></thead><tbody id="importTableBody"></tbody></table>
       </div>
@@ -532,24 +560,24 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
       <div class="prod-row"><span class="prod-name">ATG Services</span><span class="prod-pct">T1: 15%</span><span class="prod-pct" style="color:var(--gold);margin-left:8px">T2: 32.5%</span></div>
     </div>
     <div class="card" style="margin-bottom:14px;">
-      <div style="font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:10px;">Key Rules</div>
-      <div style="font-size:12px;color:var(--text-2);line-height:2.0;">
-        📊 <b>Revenue target:</b> $125,000/month<br>
-        🏆 <b>Tier 2</b> unlocks at ≥$125k revenue<br>
-        🚀 <b>First 90 days</b> = auto Tier 2<br>
-        📅 <b>MYABs Yr2/3:</b> Commission only — does <u>not</u> count toward attainment<br>
-        🔒 <b>Legacy MYABs</b> (Yr1 before Feb 2026): Yr2/3 locked to Yr1 rate<br>
-        ✅ Paid when ATG receives invoice &amp; customer has paid in full
+      <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:12px;font-weight:600;">Key Rules</div>
+      <div style="font-size:13px;color:var(--text-2);line-height:2.2;">
+        <b>Revenue target:</b> $125,000/month<br>
+        <b>Tier 2</b> unlocks at ≥$125k revenue<br>
+        <b>First 90 days</b> = auto Tier 2<br>
+        <b>MYABs Yr2/3:</b> Commission only — does <u>not</u> count toward attainment<br>
+        <b>Legacy MYABs</b> (Yr1 before Feb 2026): Yr2/3 locked to Yr1 rate<br>
+        Paid when ATG receives invoice & customer has paid in full
       </div>
     </div>
   </div>
   <div id="ratesLegacyPlan" style="display:none">
-    <div class="card" style="border-color:rgba(217,119,6,.3);">
-      <div style="font-size:9px;color:var(--gold);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:10px;">Legacy 4-Tier Payout Rates</div>
+    <div class="card" style="border-color:rgba(192,139,26,.25);">
+      <div style="font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;font-weight:600;">Legacy 4-Tier Payout Rates</div>
       <div class="prod-grid">
-        <div class="prod-row"><span class="prod-name">Hardware</span><span class="prod-pct" style="font-size:11px">10/15/20/<span style="color:var(--gold)">25%</span></span></div>
-        <div class="prod-row"><span class="prod-name">Software</span><span class="prod-pct" style="font-size:11px">5/7.5/10/<span style="color:var(--gold)">17.5%</span></span></div>
-        <div class="prod-row"><span class="prod-name">IT / ATG Services</span><span class="prod-pct" style="font-size:11px">5/15/20/<span style="color:var(--gold)">32.5%</span></span></div>
+        <div class="prod-row"><span class="prod-name">Hardware</span><span class="prod-pct" style="font-size:12px">10/15/20/<span style="color:var(--gold)">25%</span></span></div>
+        <div class="prod-row"><span class="prod-name">Software</span><span class="prod-pct" style="font-size:12px">5/7.5/10/<span style="color:var(--gold)">17.5%</span></span></div>
+        <div class="prod-row"><span class="prod-name">IT / ATG Services</span><span class="prod-pct" style="font-size:12px">5/15/20/<span style="color:var(--gold)">32.5%</span></span></div>
       </div>
     </div>
   </div>
@@ -559,7 +587,7 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
 
 <div class="panel" id="panel-deleted">
   <div class="deleted-banner">
-    🗑 Items deleted within the last <strong>30 days</strong> appear here. They will be permanently removed after 30 days. You can restore any entry to the current month's log.
+    Items deleted within the last <strong>30 days</strong> appear here. They will be permanently removed after 30 days. You can restore any entry to the current month's log.
   </div>
   <div class="sec-hdr"><div class="sec-title">Recently Deleted</div><div class="count-pill" id="deletedCountBadge">0</div></div>
   <div id="deletedList"></div>
@@ -616,13 +644,13 @@ tr.row-excluded td { opacity: .3; text-decoration: line-through; }
       </div>
       <div class="edit-sec-lbl">Payout Status</div>
       <div class="full f-group">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text-2);">
-          <input type="checkbox" id="editHalfRev" style="accent-color:var(--blue);width:15px;height:15px;cursor:pointer;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-2);">
+          <input type="checkbox" id="editHalfRev" style="accent-color:#0f4d5b;width:16px;height:16px;cursor:pointer;">
           <span>New business — 50% revenue recognition</span>
         </label>
       </div>
       <div class="f-group"><label class="f-label">Paid by ATG?</label>
-        <select class="f-select" id="editPaid"><option value="false">⏳ Unpaid</option><option value="true">✓ Paid</option></select>
+        <select class="f-select" id="editPaid"><option value="false">Unpaid</option><option value="true">Paid</option></select>
       </div>
       <div class="f-group"><label class="f-label">Paid Date</label><input class="f-input" id="editPaidDate" type="date"></div>
     </div>
@@ -716,11 +744,9 @@ async function loadSalesFromDb(){
   salesCache=(r.data||[]).map(mapRow);
 }
 async function loadDeletedFromDb(){
-  // Load recently soft-deleted entries from localStorage (30-day window)
   var key='atg_deleted_'+currentUser.id;
   var raw=localStorage.getItem(key);
   deletedCache=raw?JSON.parse(raw):[];
-  // Purge anything older than 30 days
   var cutoff=Date.now()-30*24*60*60*1000;
   deletedCache=deletedCache.filter(d=>d.deletedAt&&d.deletedAt>cutoff);
   localStorage.setItem(key,JSON.stringify(deletedCache));
@@ -811,7 +837,7 @@ async function clearAllSales(){
   await loadSalesFromDb();
   renderDeletedList();
   refresh();
-  alert('✓ Moved '+sales.length+' sales to Recently Deleted.');
+  alert('Moved '+sales.length+' sales to Recently Deleted.');
 }
 
 // ── DELETE SINGLE (soft) ──
@@ -833,7 +859,7 @@ async function restoreSale(deletedAt){
   var entry=Object.assign({},d);
   delete entry.deletedAt;delete entry.deletedMonth;delete entry.id;
   var r=await insertSaleToDb(entry,currentMonth);
-  if(r){deletedCache.splice(idx,1);saveDeletedToStorage();await loadSalesFromDb();refresh();renderDeletedList();alert('✓ Sale restored to '+getMonthLabel(currentMonth)+'.');}
+  if(r){deletedCache.splice(idx,1);saveDeletedToStorage();await loadSalesFromDb();refresh();renderDeletedList();alert('Sale restored to '+getMonthLabel(currentMonth)+'.');}
 }
 
 // ── PERM DELETE ──
@@ -861,7 +887,7 @@ function renderDeletedList(){
         <div class="sale-acct">${d.account}</div>
         <div style="display:flex;gap:6px;align-items:center;">
           <span class="days-left-chip">${daysLeft}d left</span>
-          <button class="restore-btn" onclick="restoreSale(${d.deletedAt})">↩ Restore</button>
+          <button class="restore-btn" onclick="restoreSale(${d.deletedAt})">Restore</button>
           <button class="perm-del-btn" onclick="permDelete(${d.deletedAt})">✕</button>
         </div>
       </div>
@@ -917,7 +943,7 @@ function updateMyApsSchedule(){
   for(var yr=1;yr<=term;yr++){
     var mo=addMonths(start,12*(yr-1));
     var lbl=yr===1?'Yr 1 — counts for attainment':'Yr '+yr+' — commission only';
-    lines.push('<span style="color:'+(yr===1?'var(--blue)':'var(--orange)')+'">'+getMonthLabel(mo)+'</span> · '+lbl+(amt?' · '+fmt(amt):''));
+    lines.push('<span style="color:'+(yr===1?'var(--atg-teal)':'var(--orange)')+'">'+getMonthLabel(mo)+'</span> · '+lbl+(amt?' · '+fmt(amt):''));
   }
   document.getElementById('myApsSchedulePreview').innerHTML=lines.join('<br>');
 }
@@ -1113,7 +1139,7 @@ function refresh(){
     document.getElementById('tierCardLabel').textContent='Monthly Revenue Progress';
     document.getElementById('tierProgressFill').style.width=pct+'%';
     document.getElementById('tierProgressText').textContent=fmt(totalRev)+' revenue';
-    document.getElementById('tierNextText').textContent=tier===2?'🏆 Tier 2 Unlocked!':fmt(REVENUE_TARGET-totalRev)+' to Tier 2';
+    document.getElementById('tierNextText').textContent=tier===2?'Tier 2 Unlocked!':fmt(REVENUE_TARGET-totalRev)+' to Tier 2';
     tg.className='tier-grid two';
     tg.innerHTML=`<div class="tier-item${tier===1?' active':''}"><div class="ti-name">Tier 1</div><div class="ti-rate">Base</div><div class="ti-range">&lt;$125k</div></div><div class="tier-item${tier===2?' active':''}"><div class="ti-name">Tier 2</div><div class="ti-rate">Bonus</div><div class="ti-range">≥$125k</div></div>`;
   }
@@ -1149,8 +1175,8 @@ function renderSalesList(){
   if(!fl.length){list.innerHTML='<div class="empty-state"><div style="font-size:32px;margin-bottom:10px">'+(salesFilter==='paid'?'✅':'⏳')+'</div><div>No '+(salesFilter==='paid'?'paid':'unpaid')+' commissions this month.</div></div>';return;}
   list.innerHTML=fl.map(s=>{
     var cls=s.paid?'paid':'unpaid';
-    var yr=s.myApsGroupId?' — <span style="font-size:10px;color:var(--orange)">Yr '+(s.myApsYear||'?')+'</span>':'';
-    var pl=s.paid?'✓ Paid'+(s.paidDate?' '+s.paidDate:''):'⏳ Unpaid';
+    var yr=s.myApsGroupId?' — <span style="font-size:11px;color:var(--orange)">Yr '+(s.myApsYear||'?')+'</span>':'';
+    var pl=s.paid?'Paid'+(s.paidDate?' '+s.paidDate:''):'Unpaid';
     var prod=s.product.length>38?s.product.slice(0,38)+'…':s.product;
     return`<div class="sale-card ${cls}">
       <div class="sale-top">
@@ -1162,14 +1188,14 @@ function renderSalesList(){
         <span class="chip">${(s.marginPct*100).toFixed(1)}% mgn</span>
         <span class="chip">${(s.payoutRate*100).toFixed(1)}% · T${s.tier||'?'}</span>
         ${s.special==='myab_yr23'?'<span class="chip sv">MYABs Y2/3</span>':''}
-        ${s.myApsGroupId&&s.myApsYear===1?'<span class="chip sw">📅 MYABs Y1</span>':''}
-        ${s.special==='first90'?'<span class="chip" style="color:var(--gold);border-color:rgba(217,119,6,.3);background:var(--gold-light)">90-day</span>':''}
+        ${s.myApsGroupId&&s.myApsYear===1?'<span class="chip sw">MYABs Y1</span>':''}
+        ${s.special==='first90'?'<span class="chip" style="color:var(--gold);border-color:rgba(192,139,26,.25);background:var(--gold-light)">90-day</span>':''}
         ${s.halfRev?'<span class="chip sw">50% rev</span>':''}
-        ${s.lockedRate?'<span class="chip sv">🔒 Y1 rate</span>':''}
+        ${s.lockedRate?'<span class="chip sv">Y1 rate</span>':''}
         <span class="payout-badge ${cls}" onclick="togglePaid(${s.id})"><span class="pb-dot"></span>${pl}</span>
       </div>
       <div class="sale-bot"><span>${prod}</span><span>${fmt(s.amount)}</span></div>
-      ${s.order?`<div style="font-size:10px;color:var(--text-3);margin-top:4px">${s.order}</div>`:''}
+      ${s.order?`<div style="font-size:11px;color:var(--text-3);margin-top:4px">${s.order}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -1187,7 +1213,7 @@ function switchTab(tab){
 let importedRows=[],importExcluded=new Set();
 function saveApiKey(){var k=document.getElementById('importApiKey').value.trim();if(!k||!k.startsWith('sk-ant-')){showApiKeyStatus('Invalid key',true);return;}localStorage.setItem('atg_anthropic_key',k);showApiKeyStatus('API key saved!',false);}
 function getApiKey(){return localStorage.getItem('atg_anthropic_key')||'';}
-function showApiKeyStatus(msg,isErr){var el=document.getElementById('apiKeyStatus');el.textContent=msg;el.style.color=isErr?'var(--red)':'var(--blue)';el.style.display='block';setTimeout(()=>el.style.display='none',3000);}
+function showApiKeyStatus(msg,isErr){var el=document.getElementById('apiKeyStatus');el.textContent=msg;el.style.color=isErr?'var(--red)':'var(--atg-teal-mid)';el.style.display='block';setTimeout(()=>el.style.display='none',3000);}
 setTimeout(()=>{var k=getApiKey();if(k)document.getElementById('importApiKey').value=k;},500);
 function setImportMode(mode){
   document.getElementById('modeFile').classList.toggle('active',mode==='file');
@@ -1384,7 +1410,7 @@ async function confirmImport(){
   hideProcessing();await loadSalesFromDb();refresh();
   var breakdown=Object.keys(monthCounts).sort().map(mo=>getMonthLabel(mo)+': '+monthCounts[mo]+' sales').join('<br>');
   var re=document.getElementById('importResult');re.style.display='block';
-  re.innerHTML='<div style="background:rgba(0,115,230,.06);border:1px solid rgba(0,115,230,.2);border-radius:10px;padding:14px;text-align:center;"><div style="font-size:20px;margin-bottom:6px;">✅</div><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:700;color:var(--blue);font-size:16px;letter-spacing:.5px;">'+count+' ROWS IMPORTED</div>'+(errors?'<div style="font-size:11px;color:var(--red);margin-top:4px;">'+errors+' errors</div>':'')+'<div style="font-size:11px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div></div>';
+  re.innerHTML='<div style="background:var(--atg-sky);border:1px solid var(--atg-sky-deep);border-radius:12px;padding:16px;text-align:center;"><div style="font-size:22px;margin-bottom:6px;">✅</div><div style="font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:700;color:var(--atg-teal);font-size:16px;letter-spacing:.3px;">'+count+' ROWS IMPORTED</div>'+(errors?'<div style="font-size:12px;color:var(--red);margin-top:4px;">'+errors+' errors</div>':'')+'<div style="font-size:12px;color:var(--text-3);margin-top:8px;">'+breakdown+'</div></div>';
   document.getElementById('importPreview').style.display='none';importedRows=[];
 }
 function parseImportDate(str){
